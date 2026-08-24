@@ -321,6 +321,120 @@ async function main() {
     },
   });
 
+  const milestoneGate1 = await prisma.task.create({
+    data: {
+      title: '◆ Gate 1: Detailed Design Freeze & CAD Virtual Sign-Off',
+      description: 'Formal APQP Gate 1 virtual CAE/FEA sign-off and Class-A styling freeze.',
+      status: TaskStatus.DONE,
+      priority: Priority.CRITICAL,
+      isMilestone: true,
+      order: 2,
+      startDate: new Date('2026-04-15'),
+      dueDate: new Date('2026-04-15'),
+      projectId: project1.id,
+      columnId: colDone.id,
+      reporterId: chiefEngineer.id,
+      assigneeId: chiefEngineer.id,
+      milestoneId: m1.id,
+      labels: { create: [{ labelId: lblSafety.id }] },
+    },
+  });
+
+  const task8 = await prisma.task.create({
+    data: {
+      title: 'Idra 9,000-Ton Giga Press Rear Monocoque Die Tooling Release',
+      description: 'Manufacture single-piece rear underbody aluminum casting die sets with high-pressure vacuum injection channels.',
+      status: TaskStatus.IN_PROGRESS,
+      priority: Priority.CRITICAL,
+      order: 1,
+      estimatedHours: 95,
+      startDate: new Date('2026-04-16'),
+      dueDate: new Date('2026-06-15'),
+      projectId: project1.id,
+      columnId: colProto.id,
+      reporterId: chiefEngineer.id,
+      assigneeId: mfgLead.id,
+      milestoneId: m2.id,
+      labels: { create: [{ labelId: lblAero.id }] },
+    },
+  });
+
+  const task9 = await prisma.task.create({
+    data: {
+      title: '500kW Dual-Motor Dyno High-Speed Calibration & Thermal Run',
+      description: 'Execute 100-hour continuous high-rpm dyno validation on dual-motor SiC inverters up to 20,000 rpm.',
+      status: TaskStatus.TODO,
+      priority: Priority.HIGH,
+      order: 1,
+      estimatedHours: 85,
+      startDate: new Date('2026-04-12'),
+      dueDate: new Date('2026-05-25'),
+      projectId: project1.id,
+      columnId: colTrack.id,
+      reporterId: chiefEngineer.id,
+      assigneeId: chassisLead.id,
+      milestoneId: m2.id,
+      labels: { create: [{ labelId: lblPowertrain.id }] },
+    },
+  });
+
+  const task10 = await prisma.task.create({
+    data: {
+      title: 'Solid-State LiDAR Point Cloud Sensor Fusion Perception Stack',
+      description: 'Train neural network point cloud clustering on NVIDIA DRIVE Orin for 360-degree 250m obstacle detection.',
+      status: TaskStatus.TODO,
+      priority: Priority.HIGH,
+      order: 1,
+      estimatedHours: 70,
+      startDate: new Date('2026-05-21'),
+      dueDate: new Date('2026-07-15'),
+      projectId: project1.id,
+      columnId: colProto.id,
+      reporterId: chiefEngineer.id,
+      assigneeId: adasEngineer.id,
+      milestoneId: m2.id,
+      labels: { create: [{ labelId: lblADAS.id }] },
+    },
+  });
+
+  const task11 = await prisma.task.create({
+    data: {
+      title: 'Immersion Battery Cell Nail Penetration & Thermal Containment Test',
+      description: 'Trigger individual cylindrical cell thermal runaway and demonstrate zero cell-to-cell thermal propagation in dielectric fluid bath.',
+      status: TaskStatus.TODO,
+      priority: Priority.CRITICAL,
+      order: 2,
+      estimatedHours: 110,
+      startDate: new Date('2026-06-01'),
+      dueDate: new Date('2026-07-20'),
+      projectId: project1.id,
+      columnId: colTrack.id,
+      reporterId: chiefEngineer.id,
+      assigneeId: batteryLead.id,
+      milestoneId: m2.id,
+      labels: { create: [{ labelId: lblBattery.id }, { labelId: lblSafety.id }] },
+    },
+  });
+
+  const task12 = await prisma.task.create({
+    data: {
+      title: 'Final Assembly Line Takt Time & Pilot Body-in-White Validation',
+      description: 'Validate 90-second takt time on pilot manufacturing line with robotic adhesive application and battery pack docking.',
+      status: TaskStatus.TODO,
+      priority: Priority.MEDIUM,
+      order: 2,
+      estimatedHours: 80,
+      startDate: new Date('2026-07-01'),
+      dueDate: new Date('2026-08-30'),
+      projectId: project1.id,
+      columnId: colTrack.id,
+      reporterId: chiefEngineer.id,
+      assigneeId: mfgLead.id,
+      milestoneId: m3.id,
+      labels: { create: [{ labelId: lblHomologation.id }] },
+    },
+  });
+
   const milestoneTask = await prisma.task.create({
     data: {
       title: '◆ UNECE R100 & Euro NCAP Homologation Official Sign-Off',
@@ -328,7 +442,7 @@ async function main() {
       status: TaskStatus.TODO,
       priority: Priority.CRITICAL,
       isMilestone: true,
-      order: 1,
+      order: 3,
       startDate: new Date('2026-10-31'),
       dueDate: new Date('2026-10-31'),
       projectId: project1.id,
@@ -340,41 +454,68 @@ async function main() {
     },
   });
 
-  // CPM Dependencies (FS, SS, FF, SF)
+  // ==========================================
+  // CPM DEPENDENCY NETWORK (FS, SS, FF, SF)
+  // ==========================================
+
+  // Task 7 (ISO 26262 TSC) -> Task 2 (Battery FEA) [SS + 5 days lag]
   await prisma.taskDependency.create({
-    data: {
-      predecessorId: task7.id,
-      successorId: task2.id,
-      type: 'SS',
-      lagDays: 5,
-    },
+    data: { predecessorId: task7.id, successorId: task2.id, type: 'SS', lagDays: 5 },
   });
 
+  // Task 1 (Inverter Efficiency) -> Milestone Gate 1 [FS]
   await prisma.taskDependency.create({
-    data: {
-      predecessorId: task1.id,
-      successorId: task6.id,
-      type: 'FS',
-      lagDays: 2,
-    },
+    data: { predecessorId: task1.id, successorId: milestoneGate1.id, type: 'FS', lagDays: 5 },
   });
 
+  // Task 2 (Battery FEA) -> Milestone Gate 1 [FS]
   await prisma.taskDependency.create({
-    data: {
-      predecessorId: task3.id,
-      successorId: task6.id,
-      type: 'FS',
-      lagDays: 0,
-    },
+    data: { predecessorId: task2.id, successorId: milestoneGate1.id, type: 'FS', lagDays: 10 },
   });
 
+  // Task 4 (Active Aero) -> Milestone Gate 1 [FF]
   await prisma.taskDependency.create({
-    data: {
-      predecessorId: task6.id,
-      successorId: milestoneTask.id,
-      type: 'FS',
-      lagDays: 15,
-    },
+    data: { predecessorId: task4.id, successorId: milestoneGate1.id, type: 'FF', lagDays: 0 },
+  });
+
+  // Milestone Gate 1 -> Task 8 (Giga Press Tooling) [FS]
+  await prisma.taskDependency.create({
+    data: { predecessorId: milestoneGate1.id, successorId: task8.id, type: 'FS', lagDays: 1 },
+  });
+
+  // Task 1 (Inverter) -> Task 9 (Dyno Run) [FS + 2 days lag]
+  await prisma.taskDependency.create({
+    data: { predecessorId: task1.id, successorId: task9.id, type: 'FS', lagDays: 2 },
+  });
+
+  // Task 3 (LiDAR Calibration) -> Task 10 (LiDAR Point Cloud Stack) [FS + 1 day lag]
+  await prisma.taskDependency.create({
+    data: { predecessorId: task3.id, successorId: task10.id, type: 'FS', lagDays: 1 },
+  });
+
+  // Task 5 (BMS Balancing) -> Task 11 (Nail Penetration Test) [FS + 10 days lag]
+  await prisma.taskDependency.create({
+    data: { predecessorId: task5.id, successorId: task11.id, type: 'FS', lagDays: 10 },
+  });
+
+  // Task 8 (Giga Press) -> Task 12 (Final Assembly Pilot) [FS + 5 days lag]
+  await prisma.taskDependency.create({
+    data: { predecessorId: task8.id, successorId: task12.id, type: 'FS', lagDays: 5 },
+  });
+
+  // Task 6 (Dual-Motor Torque Vectoring) -> Task 12 (Final Assembly Pilot) [SS + 15 days lag]
+  await prisma.taskDependency.create({
+    data: { predecessorId: task6.id, successorId: task12.id, type: 'SS', lagDays: 15 },
+  });
+
+  // Task 12 (Final Assembly Pilot) -> Final Milestone Homologation [FS + 30 days lag]
+  await prisma.taskDependency.create({
+    data: { predecessorId: task12.id, successorId: milestoneTask.id, type: 'FS', lagDays: 30 },
+  });
+
+  // Task 11 (Nail Penetration Test) -> Final Milestone Homologation [FS + 20 days lag]
+  await prisma.taskDependency.create({
+    data: { predecessorId: task11.id, successorId: milestoneTask.id, type: 'FS', lagDays: 20 },
   });
 
   // Subtasks for Battery Structural FEA
