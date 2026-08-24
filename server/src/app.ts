@@ -59,6 +59,10 @@ app.use('/api/attachments', attachmentRoutes);
 
 app.use(errorHandler);
 
-httpServer.listen(config.PORT, () => {
-  console.log(`Server running on port ${config.PORT}`);
-});
+if (process.env.VERCEL !== '1') {
+  httpServer.listen(config.PORT, () => {
+    console.log(`Server running on port ${config.PORT}`);
+  });
+}
+
+export default app;
