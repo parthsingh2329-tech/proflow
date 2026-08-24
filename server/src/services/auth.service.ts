@@ -64,3 +64,20 @@ export const getProfile = async (userId: string) => {
   if (!user) throw new AppError('User not found', 404);
   return user;
 };
+
+export const updateProfile = async (userId: string, data: { name?: string; avatar?: string; password?: string }) => {
+  const updateData: any = {};
+  if (data.name) updateData.name = data.name;
+  if (data.avatar !== undefined) updateData.avatar = data.avatar;
+  if (data.password) {
+    updateData.passwordHash = await hashPassword(data.password);
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: updateData,
+    select: { id: true, name: true, email: true, globalRole: true, avatar: true },
+  });
+
+  return user;
+};

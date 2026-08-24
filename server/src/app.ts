@@ -5,6 +5,7 @@ import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { config } from './config/env';
 import { setupSocketIO } from './sockets';
 import { errorHandler } from './middleware/errorHandler';
@@ -56,6 +57,22 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/attachments', attachmentRoutes);
+
+// Serve compiled frontend in production if dist exists
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    const indexPath = path.join(clientDistPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    next();
+  });
+}
 
 app.use(errorHandler);
 
