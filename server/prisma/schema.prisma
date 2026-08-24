@@ -1,0 +1,692 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GlobalRole {
+  ADMIN
+  USER
+}
+
+enum ProjectRole {
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  COMPLETED
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  NONE
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum MilestoneStatus {
+  OPEN
+  CLOSED
+}
+
+enum BoardType {
+  KANBAN
+  SCRUM
+}
+
+enum DependencyType {
+  FS
+  SS
+  FF
+  SF
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  COMMENT_ADDED
+  MENTION
+  DUE_DATE_APPROACHING
+  MILESTONE_COMPLETED
+}
+
+enum RiskCategory {
+  TECHNICAL
+  SUPPLY_CHAIN
+  REGULATORY
+  FINANCIAL
+  SCHEDULE
+  SAFETY
+  OPERATIONAL
+}
+
+enum RiskStatus {
+  OPEN
+  MITIGATING
+  CLOSED
+  ACCEPTED
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  ESCALATED
+}
+
+enum DecisionStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum CostCategory {
+  TOOLING_AND_DIES
+  PROTOTYPE_BOM
+  ENGINEERING_MANPOWER
+  TESTING_AND_CERTIFICATION
+  RAW_MATERIALS
+  SOFTWARE_AND_LICENSES
+  CONTINGENCY
+}
+
+enum CostStatus {
+  PLANNED
+  COMMITTED
+  PAID
+  CANCELLED
+}
+
+enum WBSNodeType {
+  PHASE
+  DELIVERABLE
+  WORK_PACKAGE
+  TASK
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  CALIBRATING
+}
+
+enum GateStatus {
+  UPCOMING
+  IN_REVIEW
+  APPROVED
+  CONDITIONAL_PASS
+  REJECTED
+}
+
+enum ECOStatus {
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  IMPLEMENTED
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  passwordHash        String
+  name                String
+  avatar              String?
+  globalRole          GlobalRole           @default(USER)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  ownedProjects       Project[]
+  projectMemberships  ProjectMember[]
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  reportedTasks       Task[]               @relation("TaskReporter")
+  comments            Comment[]
+  timeEntries         TimeEntry[]
+  notifications       Notification[]
+  activityLogs        ActivityLog[]
+  uploadedAttachments Attachment[]
+  ownedRisks          Risk[]               @relation("RiskOwner")
+  ownedIssues         Issue[]              @relation("IssueOwner")
+  approvedDecisions   Decision[]           @relation("DecisionApprover")
+  createdBaselines    ProjectBaseline[]    @relation("BaselineCreator")
+  resourceProfiles    ResourceProfile[]
+  ownedWBSNodes       WBSNode[]            @relation("WBSNodeOwner")
+  signedOffGates      PhaseGate[]          @relation("GateSignOff")
+  requestedChanges    ChangeRequest[]      @relation("ChangeRequester")
+  approvedChanges     ChangeRequest[]      @relation("ChangeApprover")
+}
+
+model Project {
+  id               String              @id @default(cuid())
+  name             String
+  description      String?
+  status           ProjectStatus       @default(ACTIVE)
+  color            String              @default("#6366f1")
+  startDate        DateTime?
+  endDate          DateTime?
+  ownerId          String
+  owner            User                @relation(fields: [ownerId], references: [id])
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  members          ProjectMember[]
+  boards           Board[]
+  milestones       Milestone[]
+  labels           Label[]
+  activityLogs     ActivityLog[]
+  tasks            Task[]
+  risks            Risk[]
+  issues           Issue[]
+  decisions        Decision[]
+  baselines        ProjectBaseline[]
+  budget           ProjectBudget?
+  wbsNodes         WBSNode[]
+  resourceProfiles ResourceProfile[]
+  equipment        EquipmentResource[]
+  phaseGates       PhaseGate[]
+  changeRequests   ChangeRequest[]
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id])
+
+  @@unique([projectId, userId])
+}
+
+model Board {
+  id        String    @id @default(cuid())
+  projectId String
+  name      String
+  type      BoardType @default(KANBAN)
+  createdAt DateTime  @default(now())
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  columns   Column[]
+}
+
+model Column {
+  id        String   @id @default(cuid())
+  boardId   String
+  name      String
+  order     Int
+  color     String   @default("#e2e8f0")
+  taskLimit Int?
+  createdAt DateTime @default(now())
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+}
+
+model Task {
+  id             String        @id @default(cuid())
+  title          String
+  description    String?       @db.Text
+  status         TaskStatus    @default(TODO)
+  priority       Priority      @default(MEDIUM)
+  order          Int           @default(0)
+  dueDate        DateTime?
+  startDate      DateTime?
+  estimatedHours Float?
+  completedAt    DateTime?
+  projectId      String
+  columnId       String?
+  assigneeId     String?
+  reporterId     String
+  parentTaskId   String?
+  milestoneId    String?
+  wbsNodeId      String?
+  isMilestone    Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  column         Column?       @relation(fields: [columnId], references: [id])
+  assignee       User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reporter       User          @relation("TaskReporter", fields: [reporterId], references: [id])
+  parentTask     Task?         @relation("Subtasks", fields: [parentTaskId], references: [id])
+  subtasks       Task[]        @relation("Subtasks")
+  milestone      Milestone?    @relation(fields: [milestoneId], references: [id])
+  wbsNode        WBSNode?      @relation(fields: [wbsNodeId], references: [id])
+  comments       Comment[]
+  attachments    Attachment[]
+  timeEntries    TimeEntry[]
+  labels         TaskLabel[]
+  dependenciesAsPredecessor TaskDependency[] @relation("PredecessorTasks")
+  dependenciesAsSuccessor   TaskDependency[] @relation("SuccessorTasks")
+  baselines      TaskBaseline[]
+  assignedEquipment EquipmentResource[]
+
+  @@index([projectId])
+  @@index([columnId])
+  @@index([assigneeId])
+  @@index([reporterId])
+  @@index([parentTaskId])
+  @@index([wbsNodeId])
+}
+
+model Label {
+  id        String      @id @default(cuid())
+  projectId String
+  name      String
+  color     String
+  createdAt DateTime    @default(now())
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     TaskLabel[]
+
+  @@unique([projectId, name])
+}
+
+model TaskLabel {
+  taskId  String
+  labelId String
+  task    Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  taskId      String
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  uploadedById String
+  createdAt   DateTime @default(now())
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy  User     @relation(fields: [uploadedById], references: [id])
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  projectId   String
+  name        String
+  description String?
+  dueDate     DateTime
+  status      MilestoneStatus @default(OPEN)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  taskId      String
+  userId      String
+  startTime   DateTime
+  endTime     DateTime?
+  duration    Int?      
+  description String?
+  createdAt   DateTime  @default(now())
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id               String           @id @default(cuid())
+  userId           String
+  type             NotificationType
+  title            String
+  message          String
+  isRead           Boolean          @default(false)
+  relatedEntityType String?
+  relatedEntityId  String?
+  createdAt        DateTime         @default(now())
+  user             User             @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  projectId   String
+  taskId      String?
+  userId      String
+  action      String
+  entityType  String
+  entityId    String
+  oldValues   Json?
+  newValues   Json?
+  createdAt   DateTime @default(now())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId])
+}
+
+model TaskDependency {
+  id            String         @id @default(cuid())
+  predecessorId String
+  successorId   String
+  type          DependencyType @default(FS)
+  lagDays       Int            @default(0)
+  createdAt     DateTime       @default(now())
+  predecessor   Task           @relation("PredecessorTasks", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor     Task           @relation("SuccessorTasks", fields: [successorId], references: [id], onDelete: Cascade)
+
+  @@unique([predecessorId, successorId])
+  @@index([predecessorId])
+  @@index([successorId])
+}
+
+// ==========================================
+// PHASE 1: PROJECT CONTROLS CORE MODELS
+// ==========================================
+
+model Risk {
+  id           String       @id @default(cuid())
+  projectId    String
+  riskCode     String       // e.g. RSK-001
+  title        String
+  description  String?      @db.Text
+  category     RiskCategory @default(TECHNICAL)
+  probability  Int          @default(3) // 1 to 5
+  impact       Int          @default(3) // 1 to 5
+  score        Int          @default(9) // Probability * Impact (1 to 25)
+  status       RiskStatus   @default(OPEN)
+  mitigation   String?      @db.Text
+  contingency  String?      @db.Text
+  trigger      String?      @db.Text
+  ownerId      String?
+  dueDate      DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner        User?        @relation("RiskOwner", fields: [ownerId], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Issue {
+  id               String        @id @default(cuid())
+  projectId        String
+  issueCode        String        // e.g. ISS-001
+  title            String
+  description      String?       @db.Text
+  severity         IssueSeverity @default(HIGH)
+  status           IssueStatus   @default(OPEN)
+  rootCause        String?       @db.Text
+  correctiveAction String?       @db.Text
+  escalatedTo      String?
+  ownerId          String?
+  dueDate          DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner            User?         @relation("IssueOwner", fields: [ownerId], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Decision {
+  id              String         @id @default(cuid())
+  projectId       String
+  decisionCode    String         // e.g. DEC-001
+  title           String
+  decisionDate    DateTime       @default(now())
+  summary         String         @db.Text
+  rationale       String?        @db.Text
+  financialImpact String?        // e.g. "+₹35 Lakhs" or "-$50,000"
+  scheduleImpact  String?        // e.g. "-3 Weeks" or "+10 Days"
+  status          DecisionStatus @default(APPROVED)
+  approvedById    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  approvedBy      User?          @relation("DecisionApprover", fields: [approvedById], references: [id])
+
+  @@index([projectId])
+}
+
+model ProjectBaseline {
+  id          String         @id @default(cuid())
+  projectId   String
+  name        String         // e.g. "Baseline T0 (Initial Release Plan)"
+  description String?
+  createdById String?
+  createdAt   DateTime       @default(now())
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User?          @relation("BaselineCreator", fields: [createdById], references: [id])
+  tasks       TaskBaseline[]
+
+  @@index([projectId])
+}
+
+model TaskBaseline {
+  id             String          @id @default(cuid())
+  baselineId     String
+  taskId         String
+  startDate      DateTime?
+  dueDate        DateTime?
+  estimatedHours Float?
+  baseline       ProjectBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  task           Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([baselineId])
+  @@index([taskId])
+}
+
+// ==========================================
+// PHASE 2: FINANCIALS & EVM CONTROLS MODELS
+// ==========================================
+
+model ProjectBudget {
+  id                 String           @id @default(cuid())
+  projectId          String           @unique
+  currency           String           @default("INR") // e.g. INR (₹), USD ($), EUR (€)
+  approvedBudget     Float            @default(0)     // BAC (Budget at Completion)
+  contingencyReserve Float            @default(0)
+  notes              String?          @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costItems          BudgetCostItem[]
+  evmSnapshots       EVMSnapshot[]
+
+  @@index([projectId])
+}
+
+model BudgetCostItem {
+  id               String       @id @default(cuid())
+  budgetId         String
+  name             String
+  category         CostCategory @default(PROTOTYPE_BOM)
+  plannedAmount    Float        @default(0)
+  committedAmount  Float        @default(0)
+  actualAmount     Float        @default(0)
+  vendor           String?
+  purchaseOrderNo  String?      // e.g. PO-8820
+  invoiceNo        String?      // e.g. INV-9912
+  status           CostStatus   @default(PLANNED)
+  dueDate          DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  budget           ProjectBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId])
+  @@index([category])
+}
+
+model EVMSnapshot {
+  id          String        @id @default(cuid())
+  budgetId    String
+  periodDate  DateTime      @default(now()) // monthly snapshot date
+  pv          Float         // Planned Value
+  ev          Float         // Earned Value
+  ac          Float         // Actual Cost
+  cpi         Float         // EV / AC
+  spi         Float         // EV / PV
+  eac         Float         // BAC / CPI
+  vac         Float         // BAC - EAC
+  createdAt   DateTime      @default(now())
+  budget      ProjectBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId])
+}
+
+// ==========================================
+// PHASE 3: WBS & RESOURCE CAPACITY MODELS
+// ==========================================
+
+model WBSNode {
+  id           String      @id @default(cuid())
+  projectId    String
+  parentNodeId String?
+  wbsCode      String      // e.g. 1.0, 1.1, 1.1.1
+  name         String
+  nodeType     WBSNodeType @default(WORK_PACKAGE)
+  order        Int         @default(0)
+  progress     Float       @default(0) // 0 to 100%
+  plannedCost  Float       @default(0)
+  actualCost   Float       @default(0)
+  ownerId      String?
+  startDate    DateTime?
+  dueDate      DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent       WBSNode?    @relation("WBSHierarchy", fields: [parentNodeId], references: [id], onDelete: Cascade)
+  children     WBSNode[]   @relation("WBSHierarchy")
+  owner        User?       @relation("WBSNodeOwner", fields: [ownerId], references: [id])
+  tasks        Task[]
+
+  @@index([projectId])
+  @@index([parentNodeId])
+}
+
+model ResourceProfile {
+  id                   String   @id @default(cuid())
+  userId               String
+  projectId            String
+  jobTitle             String?  // e.g. "Senior Powertrain Architect"
+  department           String?  // e.g. "High Voltage Systems"
+  weeklyCapacityHours  Float    @default(40.0) // standard capacity = 40h/week
+  hourlyRate           Float    @default(2500.0) // e.g. ₹2,500/hr
+  skills               String?  // e.g. "SiC Inverters, Thermal FEA, CAN-FD, ISO 26262"
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+model EquipmentResource {
+  id              String          @id @default(cuid())
+  projectId       String
+  name            String          // e.g. "500kW Dual-Motor Powertrain Dyno Rig"
+  category        String          // e.g. "Dyno Bench", "Wind Tunnel", "Thermal Chamber", "Crash Rig"
+  location        String?         // e.g. "Testing Bay 4, Powertrain Lab"
+  status          EquipmentStatus @default(AVAILABLE)
+  costPerHour     Float           @default(15000.0) // e.g. ₹15,000/hr
+  assignedTaskId  String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTask    Task?           @relation(fields: [assignedTaskId], references: [id])
+
+  @@index([projectId])
+}
+
+// ==========================================
+// PHASE 4: STAGE-GATE & CHANGE CONTROL (CCB)
+// ==========================================
+
+model PhaseGate {
+  id            String         @id @default(cuid())
+  projectId     String
+  gateCode      String         // e.g. G0, G1, G2, G3, G4
+  name          String         // e.g. "Gate 1: Detailed Design Freeze & CAD Virtual Sign-Off"
+  targetDate    DateTime
+  status        GateStatus     @default(UPCOMING)
+  reviewSummary String?        @db.Text
+  signOffById   String?
+  signOffDate   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  signOffBy     User?          @relation("GateSignOff", fields: [signOffById], references: [id])
+  criteria      GateCriteria[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model GateCriteria {
+  id            String    @id @default(cuid())
+  gateId        String
+  description   String    // e.g. "800V Inverter Thermal CFD simulation converged under 65°C junction temp"
+  isMandatory   Boolean   @default(true)
+  isMet         Boolean   @default(false)
+  evidenceNotes String?   @db.Text
+  createdAt     DateTime  @default(now())
+  gate          PhaseGate @relation(fields: [gateId], references: [id], onDelete: Cascade)
+
+  @@index([gateId])
+}
+
+model ChangeRequest {
+  id                 String     @id @default(cuid())
+  projectId          String
+  ecoCode            String     // e.g. ECO-0104
+  title              String
+  description        String     @db.Text
+  reason             String     @db.Text
+  costImpact         Float      @default(0) // Financial delta (e.g. +₹35,00,000)
+  scheduleImpactDays Int        @default(0) // Schedule slippage / acceleration in days (e.g. +14)
+  riskImpact         String?    @db.Text
+  status             ECOStatus  @default(SUBMITTED)
+  requestedById      String
+  approvedById       String?
+  approvedAt         DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  project            Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requestedBy        User       @relation("ChangeRequester", fields: [requestedById], references: [id])
+  approvedBy         User?      @relation("ChangeApprover", fields: [approvedById], references: [id])
+
+  @@index([projectId])
+  @@index([status])
+}
