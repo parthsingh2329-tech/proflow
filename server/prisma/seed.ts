@@ -43,7 +43,7 @@ async function main() {
   const chiefEngineer = await prisma.user.create({
     data: {
       email: 'admin@proflow.com',
-      name: 'Dr. Marcus Vance (Chief EV Architect)',
+      name: 'Parth Singh (Program Director & Chief EV Architect)',
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       passwordHash,
       globalRole: GlobalRole.ADMIN,
@@ -52,8 +52,8 @@ async function main() {
 
   const batteryLead = await prisma.user.create({
     data: {
-      email: 'member@proflow.com',
-      name: 'Elena Rostova (Battery Systems Lead)',
+      email: 'kashish.motwani@proflow.com',
+      name: 'Kashish Motwani (Battery Systems & Thermal Lead)',
       avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
       passwordHash,
       globalRole: GlobalRole.USER,
@@ -62,9 +62,9 @@ async function main() {
 
   const adasEngineer = await prisma.user.create({
     data: {
-      email: 'alex.chen@auto-apex.com',
-      name: 'Alex Chen (ADAS & Sensor Fusion)',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      email: 'rashika.sarawgi@proflow.com',
+      name: 'Rashika Sarawgi (ADAS Perception & Autonomy Lead)',
+      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
       passwordHash,
       globalRole: GlobalRole.USER,
     },
@@ -72,9 +72,19 @@ async function main() {
 
   const chassisLead = await prisma.user.create({
     data: {
-      email: 'sarah.miller@auto-apex.com',
-      name: 'Sarah Miller (Chassis & Aerodynamics Lead)',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+      email: 'ritik.raj@proflow.com',
+      name: 'Ritik Raj (800V SiC Powertrain & Inverter Lead)',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+      passwordHash,
+      globalRole: GlobalRole.USER,
+    },
+  });
+
+  const mfgLead = await prisma.user.create({
+    data: {
+      email: 'abhinav.kumar@proflow.com',
+      name: 'Abhinav Kumar (Manufacturing & Tooling Specialist)',
+      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
       passwordHash,
       globalRole: GlobalRole.USER,
     },
@@ -82,9 +92,9 @@ async function main() {
 
   const safetyOfficer = await prisma.user.create({
     data: {
-      email: 'rajesh.kumar@auto-apex.com',
-      name: 'Rajesh Kumar (ISO 26262 Safety & Homologation)',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+      email: 'priyanshi.mandiya@proflow.com',
+      name: 'Priyanshi Mandiya (Quality & Homologation Gatekeeper)',
+      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
       passwordHash,
       globalRole: GlobalRole.USER,
     },
@@ -108,6 +118,7 @@ async function main() {
           { userId: batteryLead.id, role: ProjectRole.MANAGER },
           { userId: adasEngineer.id, role: ProjectRole.MEMBER },
           { userId: chassisLead.id, role: ProjectRole.MEMBER },
+          { userId: mfgLead.id, role: ProjectRole.MEMBER },
           { userId: safetyOfficer.id, role: ProjectRole.MEMBER },
         ],
       },
@@ -1052,47 +1063,56 @@ async function main() {
       {
         userId: chiefEngineer.id,
         projectId: project1.id,
-        jobTitle: 'Chief EV Architect',
-        department: 'High Voltage Powertrain',
+        jobTitle: 'Program Director & Chief EV Architect',
+        department: 'Executive Engineering',
         weeklyCapacityHours: 40.0,
         hourlyRate: 5500.0,
-        skills: '800V SiC Inverters, Torque Vectoring, ISO 26262 ASIL-D',
+        skills: '800V SiC Architecture, APQP Stage Gates, Vehicle Integration, ISO 26262 ASIL-D',
       },
       {
         userId: batteryLead.id,
         projectId: project1.id,
-        jobTitle: 'Lead Battery Thermal Systems Engineer',
+        jobTitle: 'Battery Systems & Thermal Lead',
         department: 'Energy Storage Systems',
         weeklyCapacityHours: 40.0,
         hourlyRate: 4000.0,
-        skills: 'Immersion Cooling, 100kWh Battery Enclosure FEA, Cell Safety',
+        skills: 'Direct Immersion Dielectric Cooling, 100kWh NMC Pack, Thermal CFD',
       },
       {
         userId: adasEngineer.id,
         projectId: project1.id,
-        jobTitle: 'ADAS Perception Engineer',
+        jobTitle: 'ADAS Perception & Autonomy Lead',
         department: 'Autonomous Driving & Software',
         weeklyCapacityHours: 40.0,
         hourlyRate: 3500.0,
-        skills: 'Flash LiDAR Point Cloud Fusion, 77GHz Radar, Computer Vision',
+        skills: 'Flash LiDAR Point Cloud Fusion, 77GHz Radar, Deep Learning Vision, ROS2',
       },
       {
         userId: chassisLead.id,
         projectId: project1.id,
-        jobTitle: 'Chassis & Aerodynamics Lead',
-        department: 'Vehicle Dynamics',
+        jobTitle: '800V SiC Powertrain & Inverter Lead',
+        department: 'Powertrain & Power Electronics',
         weeklyCapacityHours: 40.0,
         hourlyRate: 3800.0,
-        skills: 'Active Aerodynamics, Wind Tunnel CFD, Carbon Fiber Monocoque',
+        skills: 'Silicon Carbide MOSFETs, 500kW Dual-Motor Dyno Tuning, Space-Vector PWM',
+      },
+      {
+        userId: mfgLead.id,
+        projectId: project1.id,
+        jobTitle: 'Manufacturing & Tooling Specialist',
+        department: 'Advanced Manufacturing & Production',
+        weeklyCapacityHours: 40.0,
+        hourlyRate: 3600.0,
+        skills: 'Idra 9,000-Ton Giga Press Dies, Mold Flow FEA, Pilot Assembly Takt Time',
       },
       {
         userId: safetyOfficer.id,
         projectId: project1.id,
-        jobTitle: 'Automotive Safety & Homologation Manager',
-        department: 'Regulatory Compliance',
+        jobTitle: 'Quality & Homologation Gatekeeper',
+        department: 'Quality & Regulatory Compliance',
         weeklyCapacityHours: 40.0,
         hourlyRate: 4200.0,
-        skills: 'UNECE R100 Rev. 3, Euro NCAP Crash Homologation, ISO 26262',
+        skills: 'UNECE R100 Rev. 3, Euro NCAP 5-Star Crash Certification, ISO 26262 Audit',
       },
     ],
   });
