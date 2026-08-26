@@ -42,3 +42,7 @@ server/uploads/*
 
 # Vercel
 .vercel
+
+# Binaries
+*.exe
+
