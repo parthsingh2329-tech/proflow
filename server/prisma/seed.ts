@@ -183,7 +183,11 @@ async function main() {
     include: { columns: { orderBy: { order: 'asc' } } },
   });
 
-  const [colConcept, colCAE, colProto, colTrack, colDone] = board1.columns;
+  const colConcept = board1.columns.find(c => c.name.includes('Concept')) || board1.columns[0]!;
+  const colCAE = board1.columns.find(c => c.name.includes('Simulation')) || board1.columns[1] || board1.columns[0]!;
+  const colProto = board1.columns.find(c => c.name.includes('Prototype')) || board1.columns[2] || board1.columns[0]!;
+  const colTrack = board1.columns.find(c => c.name.includes('Track')) || board1.columns[3] || board1.columns[0]!;
+  const colDone = board1.columns.find(c => c.name.includes('Homologation') || c.name.includes('Sign-Off')) || board1.columns[4] || board1.columns[0]!;
 
   // Tasks for Project Apex
   const task1 = await prisma.task.create({
