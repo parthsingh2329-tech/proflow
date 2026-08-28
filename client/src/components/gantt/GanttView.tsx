@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Task, DependencyType, WBSNode, WBSNodeType } from '@/types';
+import { Task, WBSNode, WBSNodeType } from '@/types';
 import { 
   format, 
   differenceInDays, 
@@ -8,9 +8,9 @@ import {
   endOfMonth, 
   eachDayOfInterval, 
   addMonths, 
-  subMonths,
-  isToday,
-  isWeekend
+  subMonths, 
+  isToday, 
+  isWeekend 
 } from 'date-fns';
 import { 
   ChevronLeft, 
@@ -26,7 +26,8 @@ import {
   Maximize2,
   Minimize2,
   Clock,
-  HelpCircle
+  HelpCircle,
+  Activity
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,7 +58,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
 
   // Fetch the EXACT live WBS tree that is displayed in the WBS tab
-  const { data: wbsTree = [], isLoading: isWbsLoading } = useWBS(projectId);
+  const { data: wbsTree = [] } = useWBS(projectId);
 
   // Compute Critical Path Metrics across all project tasks
   const { tasks: cpmTasks, criticalPathTaskIds, projectDurationDays } = useMemo(() => {
@@ -152,7 +153,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
   };
 
   return (
-    <Card className="shadow-sm overflow-hidden bg-white dark:bg-slate-900">
+    <Card className="shadow-sm overflow-hidden bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
       {/* Top Header Controls */}
       <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 p-4 dark:border-slate-800 gap-4">
         <div className="flex items-center space-x-3">
@@ -169,7 +170,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
               </Badge>
               {criticalPathTaskIds.size > 0 && (
                 <Badge variant="destructive" className="bg-rose-500 hover:bg-rose-600 text-[10px] px-1.5 py-0.5">
-                  <Zap className="h-3 w-3 mr-1" /> {criticalPathTaskIds.size} on Critical Path
+                  <Zap className="h-3 w-3 mr-1" /> {criticalPathTaskIds.size} Critical Activities
                 </Badge>
               )}
             </div>
@@ -260,7 +261,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
           </div>
 
           {/* Slack / Float Toggle */}
-          <div className="flex items-center space-x-2 bg-slate-100 dark:bg-slate-800/80 px-3 py-1 rounded-lg">
+          <div className="flex items-center space-x-2 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900 px-3 py-1 rounded-lg">
             <Switch
               id="slack-toggle"
               checked={showSlack}
@@ -268,10 +269,10 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
             />
             <label
               htmlFor="slack-toggle"
-              className="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center space-x-1"
+              className="text-xs font-bold text-amber-800 dark:text-amber-300 cursor-pointer flex items-center space-x-1"
             >
-              <Clock className="h-3.5 w-3.5 text-amber-500" />
-              <span>Total Slack</span>
+              <Clock className="h-3.5 w-3.5 text-amber-600" />
+              <span>Total Float / Slack</span>
             </label>
           </div>
 
@@ -301,15 +302,15 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="h-2.5 w-6 rounded bg-indigo-500" />
-            <span className="text-slate-600 dark:text-slate-400">Standard Activity</span>
+            <span className="text-slate-600 dark:text-slate-400">Standard Work Package</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="h-2.5 w-6 rounded bg-rose-500" />
-            <span className="text-slate-600 dark:text-slate-400 font-semibold text-rose-600 dark:text-rose-400">Critical Path (0d Slack)</span>
+            <span className="text-slate-600 dark:text-slate-400 font-bold text-rose-600 dark:text-rose-400">Critical Path (0d Slack)</span>
           </div>
           <div className="flex items-center space-x-1.5">
-            <span className="h-2.5 w-7 border-y border-r border-dashed border-amber-400 bg-amber-100/60 dark:bg-amber-950/60 rounded-r" />
-            <span className="text-slate-600 dark:text-slate-400 font-medium text-amber-700 dark:text-amber-400">Total Slack / Float Bar</span>
+            <span className="h-2.5 w-7 border-y-2 border-r-2 border-dashed border-amber-500 bg-amber-200/80 dark:bg-amber-900/80 rounded-r" />
+            <span className="text-slate-700 dark:text-slate-300 font-bold text-amber-700 dark:text-amber-400">Total Float / Slack Extension Bar</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <Diamond className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
@@ -319,24 +320,24 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
 
         <div className="flex items-center space-x-1 text-[11px] text-slate-500 font-medium hidden sm:flex">
           <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
-          <span>Slack = Maximum delay without pushing project deadline</span>
+          <span>Slack = Available float before pushing downstream deadline</span>
         </div>
       </div>
 
       {/* Scrollable Gantt Matrix */}
       <CardContent className="p-0 overflow-x-auto">
-        <div className="min-w-[1100px] select-none">
+        <div className="min-w-[1150px] select-none">
           {/* Header Row: Days & Months */}
           <div
             className="grid bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-xs font-semibold sticky top-0 z-20"
             style={{
-              gridTemplateColumns: `420px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
+              gridTemplateColumns: `440px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
             }}
           >
             <div className="p-3 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
               <span>{viewMode === 'WBS' ? 'WBS Tree Hierarchy & Work Packages' : 'All Project Activities'}</span>
               <div className="flex items-center space-x-3 text-[10px] text-slate-400 font-normal">
-                <span>Slack</span>
+                <span className="font-semibold text-amber-600 dark:text-amber-400">Total Slack</span>
                 <span>Progress</span>
               </div>
             </div>
@@ -384,6 +385,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
                   toggleNodeCollapse={toggleNodeCollapse}
                   findTaskForWBSNode={findTaskForWBSNode}
                   projectStartDate={projectStartDate}
+                  projectEndDate={projectEndDate}
                   totalTimelineDays={totalTimelineDays}
                   showCriticalPath={showCriticalPath}
                   showSlack={showSlack}
@@ -428,6 +430,7 @@ interface RecursiveWBSGanttRowProps {
   toggleNodeCollapse: (id: string) => void;
   findTaskForWBSNode: (node: WBSNode) => (Task & { isCritical?: boolean; slack?: number; totalFloat?: number }) | undefined;
   projectStartDate: Date;
+  projectEndDate: Date;
   totalTimelineDays: number;
   showCriticalPath: boolean;
   showSlack: boolean;
@@ -443,6 +446,7 @@ function RecursiveWBSGanttRow({
   toggleNodeCollapse,
   findTaskForWBSNode,
   projectStartDate,
+  projectEndDate,
   totalTimelineDays,
   showCriticalPath,
   showSlack,
@@ -456,7 +460,6 @@ function RecursiveWBSGanttRow({
   const isDeliverable = node.nodeType === 'DELIVERABLE';
 
   const linkedTask = findTaskForWBSNode(node);
-  const taskSlack = linkedTask?.slack ?? linkedTask?.totalFloat ?? 0;
 
   // Determine dates
   let nodeStart = node.startDate ? new Date(node.startDate) : linkedTask?.startDate ? new Date(linkedTask.startDate) : projectStartDate;
@@ -468,16 +471,27 @@ function RecursiveWBSGanttRow({
   const startOffsetDays = differenceInDays(nodeStart, projectStartDate);
   const durationDays = linkedTask?.isMilestone ? 0 : Math.max(1, differenceInDays(nodeEnd, nodeStart) + 1);
 
+  // Compute Slack
+  let taskSlack = linkedTask?.slack ?? linkedTask?.totalFloat;
+  if (taskSlack === undefined) {
+    // If not calculated by CPM graph, default to available buffer to project end or phase end
+    if (isPhase || isDeliverable) {
+      taskSlack = 0;
+    } else {
+      taskSlack = Math.max(0, differenceInDays(projectEndDate, nodeEnd) - 30);
+    }
+  }
+
+  const isTaskOnCriticalPath = (showCriticalPath && (linkedTask?.isCritical || (linkedTask && criticalPathTaskIds.has(linkedTask.id)))) || (!isPhase && !isDeliverable && taskSlack === 0);
+  const isMilestone = linkedTask?.isMilestone || node.name.includes('◆') || node.name.toLowerCase().includes('sign-off');
+
   const leftPercent = Math.max(0, Math.min(100, (startOffsetDays / totalTimelineDays) * 100));
-  const widthPercent = linkedTask?.isMilestone ? 0 : Math.max(1.5, Math.min(100 - leftPercent, (durationDays / totalTimelineDays) * 100));
+  const widthPercent = isMilestone ? 0 : Math.max(1.5, Math.min(100 - leftPercent, (durationDays / totalTimelineDays) * 100));
 
   // Slack Bar positioning
   const slackStartOffsetDays = startOffsetDays + durationDays;
   const slackLeftPercent = Math.max(0, Math.min(100, (slackStartOffsetDays / totalTimelineDays) * 100));
   const slackWidthPercent = Math.max(0, Math.min(100 - slackLeftPercent, (taskSlack / totalTimelineDays) * 100));
-
-  const isTaskOnCriticalPath = showCriticalPath && (linkedTask?.isCritical || (linkedTask && criticalPathTaskIds.has(linkedTask.id)) || taskSlack === 0);
-  const isMilestone = linkedTask?.isMilestone || node.name.includes('◆') || node.name.toLowerCase().includes('sign-off');
 
   // Indentation styling based on WBS depth
   const indentClass = level === 0 ? 'pl-3' : level === 1 ? 'pl-7' : 'pl-11';
@@ -495,7 +509,7 @@ function RecursiveWBSGanttRow({
             : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50'
         }`}
         style={{
-          gridTemplateColumns: `420px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
+          gridTemplateColumns: `440px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
         }}
       >
         {/* Left Side: WBS Node Hierarchy Details + Slack badge */}
@@ -546,12 +560,12 @@ function RecursiveWBSGanttRow({
 
           <div className="flex items-center space-x-2 shrink-0">
             {/* Slack Badge */}
-            {!isPhase && !isDeliverable && !isMilestone && linkedTask && (
+            {!isPhase && !isDeliverable && !isMilestone && (
               <span
-                className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shadow-xs ${
                   isTaskOnCriticalPath || taskSlack === 0
-                    ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900'
-                    : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-900'
+                    ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/80 border border-rose-200 dark:border-rose-900'
+                    : 'text-amber-800 dark:text-amber-300 bg-amber-100/90 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800'
                 }`}
                 title={`Total Float / Slack: ${taskSlack} days`}
               >
@@ -625,14 +639,14 @@ function RecursiveWBSGanttRow({
               {/* Slack / Float Extension Bar */}
               {showSlack && taskSlack > 0 && slackWidthPercent > 0 && (
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 h-3.5 border-y border-r border-dashed border-amber-500/80 bg-amber-100/50 dark:bg-amber-950/40 rounded-r-md z-5 flex items-center justify-end pr-1 cursor-pointer transition-all hover:bg-amber-200/60"
+                  className="absolute top-1/2 -translate-y-1/2 h-3.5 border-y-2 border-r-2 border-dashed border-amber-500 bg-amber-200/70 dark:bg-amber-950/60 rounded-r-md z-5 flex items-center justify-end pr-1 cursor-pointer transition-all hover:bg-amber-300/80 shadow-xs"
                   style={{
                     left: `${slackLeftPercent}%`,
                     width: `${slackWidthPercent}%`,
                   }}
                   title={`Available Total Float / Slack: +${taskSlack} days\nActivity can slip by ${taskSlack} days without delaying project completion.\nLate Finish: ${format(addDays(nodeEnd, taskSlack), 'MMM d, yyyy')}`}
                 >
-                  <span className="text-[8px] font-mono font-bold text-amber-800 dark:text-amber-300 select-none">
+                  <span className="text-[8px] font-mono font-extrabold text-amber-900 dark:text-amber-200 select-none">
                     +{taskSlack}d
                   </span>
                 </div>
@@ -654,6 +668,7 @@ function RecursiveWBSGanttRow({
             toggleNodeCollapse={toggleNodeCollapse}
             findTaskForWBSNode={findTaskForWBSNode}
             projectStartDate={projectStartDate}
+            projectEndDate={projectEndDate}
             totalTimelineDays={totalTimelineDays}
             showCriticalPath={showCriticalPath}
             showSlack={showSlack}
@@ -709,7 +724,7 @@ function FlatGanttTaskRow({
   const slackLeftPercent = Math.max(0, Math.min(100, (slackStartOffsetDays / totalTimelineDays) * 100));
   const slackWidthPercent = Math.max(0, Math.min(100 - slackLeftPercent, (taskSlack / totalTimelineDays) * 100));
 
-  const isTaskOnCriticalPath = showCriticalPath && (task.isCritical || criticalPathTaskIds.has(task.id) || taskSlack === 0);
+  const isTaskOnCriticalPath = (showCriticalPath && (task.isCritical || criticalPathTaskIds.has(task.id))) || taskSlack === 0;
   const isMilestone = task.isMilestone || !!task.milestoneId;
   const hasDependencies = (task.dependenciesAsSuccessor?.length ?? 0) > 0 || (task.dependenciesAsPredecessor?.length ?? 0) > 0;
 
@@ -721,7 +736,7 @@ function FlatGanttTaskRow({
           : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50'
       }`}
       style={{
-        gridTemplateColumns: `420px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
+        gridTemplateColumns: `440px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
       }}
     >
       <div
@@ -751,10 +766,10 @@ function FlatGanttTaskRow({
           {/* Slack Badge */}
           {!isMilestone && (
             <span
-              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shadow-xs ${
                 isTaskOnCriticalPath || taskSlack === 0
-                  ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900'
-                  : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 border border-amber-200 dark:border-amber-900'
+                  ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/80 border border-rose-200 dark:border-rose-900'
+                  : 'text-amber-800 dark:text-amber-300 bg-amber-100/90 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800'
               }`}
               title={`Total Float / Slack: ${taskSlack} days`}
             >
@@ -808,14 +823,14 @@ function FlatGanttTaskRow({
             {/* Slack / Float Extension Bar */}
             {showSlack && taskSlack > 0 && slackWidthPercent > 0 && (
               <div
-                className="absolute top-1/2 -translate-y-1/2 h-3.5 border-y border-r border-dashed border-amber-500/80 bg-amber-100/50 dark:bg-amber-950/40 rounded-r-md z-5 flex items-center justify-end pr-1 cursor-pointer transition-all hover:bg-amber-200/60"
+                className="absolute top-1/2 -translate-y-1/2 h-3.5 border-y-2 border-r-2 border-dashed border-amber-500 bg-amber-200/70 dark:bg-amber-950/60 rounded-r-md z-5 flex items-center justify-end pr-1 cursor-pointer transition-all hover:bg-amber-300/80 shadow-xs"
                 style={{
                   left: `${slackLeftPercent}%`,
                   width: `${slackWidthPercent}%`,
                 }}
                 title={`Available Total Float / Slack: +${taskSlack} days\nActivity can slip by ${taskSlack} days without delaying project completion.\nLate Finish: ${format(addDays(taskEnd, taskSlack), 'MMM d, yyyy')}`}
               >
-                <span className="text-[8px] font-mono font-bold text-amber-800 dark:text-amber-300 select-none">
+                <span className="text-[8px] font-mono font-extrabold text-amber-900 dark:text-amber-200 select-none">
                   +{taskSlack}d
                 </span>
               </div>

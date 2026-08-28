@@ -155,10 +155,11 @@ export function calculateCriticalPath(tasks: Task[]): CPMResult {
     const node = taskMap.get(task.id);
     if (!node) return task;
 
-    const slack = isFinite(node.ls) && isFinite(node.es) ? Math.max(0, node.ls - node.es) : 0;
-    const isCritical = slack === 0 || (node.dependenciesAsSuccessor?.length ?? 0) > 0;
+    const rawSlack = isFinite(node.ls) && isFinite(node.es) ? Math.max(0, node.ls - node.es) : 0;
+    const slack = Math.round(rawSlack);
+    const isCritical = slack === 0;
 
-    if (slack === 0) {
+    if (isCritical) {
       criticalPathTaskIds.add(task.id);
     }
 
@@ -166,6 +167,7 @@ export function calculateCriticalPath(tasks: Task[]): CPMResult {
       ...task,
       isCritical,
       slack,
+      totalFloat: slack,
       earlyStart: addDays(earliestProjectStart, node.es),
       earlyFinish: addDays(earliestProjectStart, node.ef),
       lateStart: isFinite(node.ls) ? addDays(earliestProjectStart, node.ls) : undefined,
