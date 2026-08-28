@@ -84,6 +84,7 @@ export interface Task {
   assignee?: User;
   reporter?: User;
   milestone?: Milestone;
+  wbsNode?: { id: string; wbsCode: string; name: string; progress: number };
   labels?: Label[];
   comments?: Comment[];
   attachments?: Attachment[];

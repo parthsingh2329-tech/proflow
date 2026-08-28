@@ -62,6 +62,12 @@ export default function KanbanCard({ task, onClick }: KanbanCardProps) {
           </span>
         )}
 
+        {task.wbsNode?.wbsCode && (
+          <span className="inline-flex items-center rounded bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800" title={`WBS Deliverable: ${task.wbsNode.wbsCode} ${task.wbsNode.name}`}>
+            WBS: {task.wbsNode.wbsCode}
+          </span>
+        )}
+
         <Badge variant={priorityInfo.variant} className="text-[10px] px-1.5 py-0">
           {priorityInfo.label}
         </Badge>

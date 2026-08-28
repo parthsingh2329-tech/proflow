@@ -75,6 +75,7 @@ export const getTasksByProject = async (projectId: string, filters: any) => {
         labels: { include: { label: true } },
         column: true,
         milestone: true,
+        wbsNode: { select: { id: true, wbsCode: true, name: true, progress: true } },
         dependenciesAsSuccessor: { include: { predecessor: { select: { id: true, title: true, status: true, startDate: true, dueDate: true } } } },
         dependenciesAsPredecessor: { include: { successor: { select: { id: true, title: true, status: true, startDate: true, dueDate: true } } } },
         _count: { select: { subtasks: true } }
@@ -99,6 +100,7 @@ export const getTaskById = async (taskId: string) => {
       timeEntries: true,
       milestone: true,
       column: true,
+      wbsNode: { select: { id: true, wbsCode: true, name: true, progress: true } },
       dependenciesAsSuccessor: { include: { predecessor: { select: { id: true, title: true, status: true, startDate: true, dueDate: true } } } },
       dependenciesAsPredecessor: { include: { successor: { select: { id: true, title: true, status: true, startDate: true, dueDate: true } } } },
     },
