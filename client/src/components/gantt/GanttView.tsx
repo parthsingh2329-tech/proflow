@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Task, DependencyType, WBSNode } from '@/types';
+import { Task, DependencyType, WBSNode, WBSNodeType } from '@/types';
 import { 
   format, 
   differenceInDays, 
@@ -25,7 +25,8 @@ import {
   ChevronRight as ChevronRightIcon,
   Maximize2,
   Minimize2,
-  FolderOpen
+  FolderOpen,
+  CheckCircle2
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,13 @@ const STATUS_COLORS: Record<string, string> = {
   DONE: '#10b981',
 };
 
+const NODE_TYPE_BADGES: Record<WBSNodeType, { label: string; bg: string; text: string }> = {
+  PHASE: { label: 'Phase', bg: 'bg-indigo-600', text: 'text-white' },
+  DELIVERABLE: { label: 'Deliverable', bg: 'bg-blue-500', text: 'text-white' },
+  WORK_PACKAGE: { label: 'Work Package', bg: 'bg-emerald-600', text: 'text-white' },
+  TASK: { label: 'Task', bg: 'bg-slate-500', text: 'text-white' },
+};
+
 export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttViewProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date('2026-03-01'));
   const [showCriticalPath, setShowCriticalPath] = useState(true);
@@ -54,8 +62,8 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
   const [zoomMode, setZoomMode] = useState<'FULL_PROJECT' | 'MONTH'>('FULL_PROJECT');
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
 
-  // Fetch the EXACT live WBS tree from backend
-  const { data: wbsTree = [] } = useWBS(projectId);
+  // Fetch the EXACT live WBS tree that is displayed in the WBS tab
+  const { data: wbsTree = [], isLoading: isWbsLoading } = useWBS(projectId);
 
   // Compute Critical Path Metrics across all project tasks
   const { tasks: cpmTasks, criticalPathTaskIds, projectDurationDays } = useMemo(() => {
@@ -118,29 +126,28 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
     setCollapsedNodes(allIds);
   };
 
-  // Helper to match tasks to WBS nodes
-  const getTasksForWBSNode = (node: WBSNode): (Task & { isCritical?: boolean; totalFloat?: number })[] => {
-    return cpmTasks.filter((t) => {
+  // Helper to find associated CPM Task for a WBS Node
+  const findTaskForWBSNode = (node: WBSNode): (Task & { isCritical?: boolean; totalFloat?: number }) | undefined => {
+    return cpmTasks.find((t) => {
       if (t.wbsNodeId === node.id || t.wbsNode?.id === node.id) return true;
       if (t.wbsNode?.wbsCode === node.wbsCode) return true;
+      if (t.title.toLowerCase().trim() === node.name.toLowerCase().trim()) return true;
 
-      // Match by title keywords
-      const titleLower = t.title.toLowerCase();
-      const nodeNameLower = node.name.toLowerCase();
+      // Match by code prefix or keyword
       const nodeCode = node.wbsCode;
-
+      const titleLower = t.title.toLowerCase();
       if (nodeCode === '1.1.1' && (titleLower.includes('inverter') || titleLower.includes('power stage'))) return true;
       if (nodeCode === '1.1.2' && titleLower.includes('gate driver')) return true;
-      if (nodeCode === '1.2.1' && (titleLower.includes('immersion') || titleLower.includes('fluid') || titleLower.includes('bms'))) return true;
-      if (nodeCode === '1.2.2' && (titleLower.includes('crush') || titleLower.includes('enclosure') || titleLower.includes('structural'))) return true;
+      if (nodeCode === '1.2.1' && (titleLower.includes('immersion') || titleLower.includes('fluid') || titleLower.includes('cfd'))) return true;
+      if (nodeCode === '1.2.2' && (titleLower.includes('crush') || titleLower.includes('enclosure') || titleLower.includes('fea'))) return true;
       if (nodeCode === '2.1.1' && (titleLower.includes('camera') || titleLower.includes('calibration'))) return true;
-      if (nodeCode === '2.1.2' && (titleLower.includes('point cloud') || titleLower.includes('fusion'))) return true;
+      if (nodeCode === '2.1.2' && (titleLower.includes('point cloud') || titleLower.includes('fusion') || titleLower.includes('solid-state'))) return true;
       if (nodeCode === '2.2.1' && titleLower.includes('suspension')) return true;
       if (nodeCode === '2.2.2' && (titleLower.includes('torque') || titleLower.includes('esc'))) return true;
-      if (nodeCode === '3.1.1' && (titleLower.includes('giga') || titleLower.includes('press') || titleLower.includes('casting'))) return true;
+      if (nodeCode === '3.1.1' && (titleLower.includes('giga') || titleLower.includes('press') || titleLower.includes('die tooling'))) return true;
       if (nodeCode === '3.1.2' && (titleLower.includes('takt') || titleLower.includes('assembly'))) return true;
       if (nodeCode === '4.1.1' && titleLower.includes('26262')) return true;
-      if (nodeCode === '4.1.2' && titleLower.includes('gate 1')) return true;
+      if (nodeCode === '4.1.2' && (titleLower.includes('gate 1') || titleLower.includes('design freeze'))) return true;
       if (nodeCode === '4.1.3' && (titleLower.includes('ncap') || titleLower.includes('unece') || titleLower.includes('homologation'))) return true;
 
       return false;
@@ -161,7 +168,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
                 Gantt Timeline & CPM Schedule
               </CardTitle>
               <Badge variant="outline" className="text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                {cpmTasks.length} Activities Total
+                {wbsTree.length > 0 ? `${wbsTree.length} WBS Phases` : `${cpmTasks.length} Activities`}
               </Badge>
               {criticalPathTaskIds.size > 0 && (
                 <Badge variant="destructive" className="bg-rose-500 hover:bg-rose-600 text-[10px] px-1.5 py-0.5">
@@ -281,7 +288,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="h-2.5 w-6 rounded bg-indigo-500" />
-            <span className="text-slate-600 dark:text-slate-400">Standard Task Bar</span>
+            <span className="text-slate-600 dark:text-slate-400">Standard Work Package</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="h-2.5 w-6 rounded bg-rose-500" />
@@ -294,7 +301,7 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
         </div>
 
         <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-          Live WBS Tree ↔ Kanban Task Integration
+          1-to-1 Identical Mirror of WBS Tree Tab
         </span>
       </div>
 
@@ -305,12 +312,12 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
           <div
             className="grid bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-xs font-semibold sticky top-0 z-20"
             style={{
-              gridTemplateColumns: `360px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
+              gridTemplateColumns: `380px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
             }}
           >
             <div className="p-3 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
-              <span>{viewMode === 'WBS' ? 'WBS Structure & Linked Kanban Tasks' : 'All Project Activities'} ({cpmTasks.length})</span>
-              <span className="text-[10px] text-slate-400 font-normal">Slack</span>
+              <span>{viewMode === 'WBS' ? 'WBS Tree Hierarchy & Work Packages' : 'All Project Activities'}</span>
+              <span className="text-[10px] text-slate-400 font-normal">Progress</span>
             </div>
 
             {timelineDays.map((day, idx) => {
@@ -345,168 +352,30 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
           <div className="divide-y divide-slate-100 dark:divide-slate-800 relative z-10">
             {viewMode === 'WBS' && wbsTree.length > 0 ? (
               // ==========================================
-              // LIVE WBS TREE FROM BACKEND
+              // EXACT RECURSIVE WBS TREE FROM BACKEND
               // ==========================================
-              wbsTree.map((phaseNode) => {
-                const isPhaseCollapsed = collapsedNodes.has(phaseNode.id);
-                const deliverables = phaseNode.children || [];
-
-                // Calculate summary start & end date for the Phase
-                const phaseStart = phaseNode.startDate ? new Date(phaseNode.startDate) : projectStartDate;
-                const phaseEnd = phaseNode.dueDate ? new Date(phaseNode.dueDate) : projectEndDate;
-                const phaseStartOffset = differenceInDays(phaseStart, projectStartDate);
-                const phaseDuration = Math.max(1, differenceInDays(phaseEnd, phaseStart) + 1);
-                const phaseLeftPercent = Math.max(0, Math.min(100, (phaseStartOffset / totalTimelineDays) * 100));
-                const phaseWidthPercent = Math.max(2, Math.min(100 - phaseLeftPercent, (phaseDuration / totalTimelineDays) * 100));
-
-                return (
-                  <React.Fragment key={phaseNode.id}>
-                    {/* WBS Phase 1.0 Row (Summary Bracket) */}
-                    <div
-                      className="grid items-center bg-slate-100/90 dark:bg-slate-800/80 font-bold py-2.5 border-b border-slate-200 dark:border-slate-700"
-                      style={{
-                        gridTemplateColumns: `360px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
-                      }}
-                    >
-                      {/* Left Phase Title */}
-                      <div
-                        onClick={() => toggleNodeCollapse(phaseNode.id)}
-                        className="px-3 text-xs font-bold text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-700 flex items-center justify-between cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60"
-                      >
-                        <div className="flex items-center space-x-2 truncate pr-2">
-                          <span className="p-0.5 rounded hover:bg-slate-300 dark:hover:bg-slate-600">
-                            {isPhaseCollapsed ? (
-                              <ChevronRightIcon className="h-4 w-4 text-slate-600 dark:text-slate-300 shrink-0" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-slate-600 dark:text-slate-300 shrink-0" />
-                            )}
-                          </span>
-                          <span className="font-mono text-[10px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold shrink-0">
-                            {phaseNode.wbsCode}
-                          </span>
-                          <span className="truncate">{phaseNode.name}</span>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
-                          {phaseNode.progress}%
-                        </span>
-                      </div>
-
-                      {/* Right Timeline: Summary Bracket Gantt Bar [=======] */}
-                      <div
-                        className="relative h-6 flex items-center"
-                        style={{ gridColumn: `2 / span ${totalTimelineDays}` }}
-                      >
-                        <div
-                          className="absolute top-1/2 -translate-y-1/2 h-3.5 bg-slate-800 dark:bg-slate-200 rounded-sm shadow-sm flex items-center overflow-hidden z-10"
-                          style={{
-                            left: `${phaseLeftPercent}%`,
-                            width: `${phaseWidthPercent}%`,
-                          }}
-                          title={`WBS Phase ${phaseNode.wbsCode} ${phaseNode.name} (${format(phaseStart, 'MMM d')} - ${format(phaseEnd, 'MMM d')}, ${phaseNode.progress}% complete)`}
-                        >
-                          <div
-                            className="h-full bg-indigo-600"
-                            style={{ width: `${phaseNode.progress}%` }}
-                          />
-                        </div>
-                        <div
-                          className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100 z-10"
-                          style={{ left: `${phaseLeftPercent}%` }}
-                        />
-                        <div
-                          className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100 z-10"
-                          style={{ left: `${phaseLeftPercent + phaseWidthPercent}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Deliverables & Work Packages If Not Collapsed */}
-                    {!isPhaseCollapsed &&
-                      deliverables.map((deliv) => {
-                        const isDelivCollapsed = collapsedNodes.has(deliv.id);
-                        const workPackages = deliv.children || [];
-
-                        return (
-                          <React.Fragment key={deliv.id}>
-                            {/* Deliverable 1.1 Row */}
-                            <div
-                              className="grid items-center bg-slate-50/70 dark:bg-slate-900/50 py-1.5 text-xs border-b border-slate-100 dark:border-slate-800"
-                              style={{
-                                gridTemplateColumns: `360px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
-                              }}
-                            >
-                              <div
-                                onClick={() => toggleNodeCollapse(deliv.id)}
-                                className="pl-6 pr-3 flex items-center justify-between border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
-                              >
-                                <div className="flex items-center space-x-1.5 truncate">
-                                  {isDelivCollapsed ? (
-                                    <ChevronRightIcon className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                  ) : (
-                                    <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                  )}
-                                  <span className="font-mono text-[9px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-1 py-0.2 rounded font-bold">
-                                    {deliv.wbsCode}
-                                  </span>
-                                  <span className="truncate">{deliv.name}</span>
-                                </div>
-                                <span className="text-[9px] font-mono text-slate-500">{deliv.progress}%</span>
-                              </div>
-                              <div style={{ gridColumn: `2 / span ${totalTimelineDays}` }} />
-                            </div>
-
-                            {/* Work Packages & Linked Kanban Tasks */}
-                            {!isDelivCollapsed &&
-                              workPackages.map((wp) => {
-                                const matchingTasks = getTasksForWBSNode(wp);
-
-                                return (
-                                  <React.Fragment key={wp.id}>
-                                    {matchingTasks.length > 0 ? (
-                                      matchingTasks.map((task) => (
-                                        <GanttTaskRow
-                                          key={task.id}
-                                          task={task}
-                                          wbsChildCode={wp.wbsCode}
-                                          projectStartDate={projectStartDate}
-                                          totalTimelineDays={totalTimelineDays}
-                                          showCriticalPath={showCriticalPath}
-                                          criticalPathTaskIds={criticalPathTaskIds}
-                                          zoomMode={zoomMode}
-                                          indent="pl-11"
-                                          onTaskClick={onTaskClick}
-                                        />
-                                      ))
-                                    ) : (
-                                      /* Fallback if no task linked yet */
-                                      <div
-                                        className="grid items-center py-1.5 text-xs text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                                        style={{
-                                          gridTemplateColumns: `360px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
-                                        }}
-                                      >
-                                        <div className="pl-11 pr-3 flex items-center space-x-2 border-r border-slate-200 dark:border-slate-800 truncate">
-                                          <span className="font-mono text-[9px] text-slate-400">{wp.wbsCode}</span>
-                                          <span className="truncate">{wp.name}</span>
-                                        </div>
-                                        <div style={{ gridColumn: `2 / span ${totalTimelineDays}` }} />
-                                      </div>
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })}
-                          </React.Fragment>
-                        );
-                      })}
-                  </React.Fragment>
-                );
-              })
+              wbsTree.map((phaseNode) => (
+                <RecursiveWBSGanttRow
+                  key={phaseNode.id}
+                  node={phaseNode}
+                  level={0}
+                  collapsedNodes={collapsedNodes}
+                  toggleNodeCollapse={toggleNodeCollapse}
+                  findTaskForWBSNode={findTaskForWBSNode}
+                  projectStartDate={projectStartDate}
+                  totalTimelineDays={totalTimelineDays}
+                  showCriticalPath={showCriticalPath}
+                  criticalPathTaskIds={criticalPathTaskIds}
+                  zoomMode={zoomMode}
+                  onTaskClick={onTaskClick}
+                />
+              ))
             ) : (
               // ==========================================
-              // FLAT CPM LIST (ALL 14 TASKS)
+              // FLAT CPM LIST (ALL TASKS)
               // ==========================================
               cpmTasks.map((task, idx) => (
-                <GanttTaskRow
+                <FlatGanttTaskRow
                   key={task.id}
                   task={task}
                   wbsChildCode={task.wbsNode?.wbsCode || `#${idx + 1}`}
@@ -515,7 +384,6 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
                   showCriticalPath={showCriticalPath}
                   criticalPathTaskIds={criticalPathTaskIds}
                   zoomMode={zoomMode}
-                  indent="pl-3"
                   onTaskClick={onTaskClick}
                 />
               ))
@@ -528,9 +396,217 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
 }
 
 // ----------------------------------------------------
-// INDIVIDUAL GANTT TASK ROW COMPONENT
+// RECURSIVE WBS GANTT ROW COMPONENT
 // ----------------------------------------------------
-interface GanttTaskRowProps {
+interface RecursiveWBSGanttRowProps {
+  node: WBSNode;
+  level: number;
+  collapsedNodes: Set<string>;
+  toggleNodeCollapse: (id: string) => void;
+  findTaskForWBSNode: (node: WBSNode) => (Task & { isCritical?: boolean; totalFloat?: number }) | undefined;
+  projectStartDate: Date;
+  totalTimelineDays: number;
+  showCriticalPath: boolean;
+  criticalPathTaskIds: Set<string>;
+  zoomMode: 'FULL_PROJECT' | 'MONTH';
+  onTaskClick: (task: Task) => void;
+}
+
+function RecursiveWBSGanttRow({
+  node,
+  level,
+  collapsedNodes,
+  toggleNodeCollapse,
+  findTaskForWBSNode,
+  projectStartDate,
+  totalTimelineDays,
+  showCriticalPath,
+  criticalPathTaskIds,
+  zoomMode,
+  onTaskClick,
+}: RecursiveWBSGanttRowProps) {
+  const isCollapsed = collapsedNodes.has(node.id);
+  const hasChildren = (node.children?.length ?? 0) > 0;
+  const isPhase = node.nodeType === 'PHASE';
+  const isDeliverable = node.nodeType === 'DELIVERABLE';
+  const isWorkPackage = node.nodeType === 'WORK_PACKAGE' || node.nodeType === 'TASK';
+
+  const linkedTask = findTaskForWBSNode(node);
+
+  // Determine dates
+  let nodeStart = node.startDate ? new Date(node.startDate) : linkedTask?.startDate ? new Date(linkedTask.startDate) : projectStartDate;
+  let nodeEnd = node.dueDate ? new Date(node.dueDate) : linkedTask?.dueDate ? new Date(linkedTask.dueDate) : addDays(nodeStart, 14);
+
+  if (isNaN(nodeStart.getTime())) nodeStart = projectStartDate;
+  if (isNaN(nodeEnd.getTime())) nodeEnd = addDays(nodeStart, 14);
+
+  const startOffsetDays = differenceInDays(nodeStart, projectStartDate);
+  const durationDays = linkedTask?.isMilestone ? 0 : Math.max(1, differenceInDays(nodeEnd, nodeStart) + 1);
+
+  const leftPercent = Math.max(0, Math.min(100, (startOffsetDays / totalTimelineDays) * 100));
+  const widthPercent = linkedTask?.isMilestone ? 0 : Math.max(1.5, Math.min(100 - leftPercent, (durationDays / totalTimelineDays) * 100));
+
+  const isTaskOnCriticalPath = showCriticalPath && (linkedTask?.isCritical || (linkedTask && criticalPathTaskIds.has(linkedTask.id)));
+  const isMilestone = linkedTask?.isMilestone || node.name.includes('◆') || node.name.toLowerCase().includes('sign-off');
+
+  // Indentation styling based on WBS depth
+  const indentClass = level === 0 ? 'pl-3' : level === 1 ? 'pl-7' : 'pl-11';
+
+  return (
+    <>
+      <div
+        className={`grid items-center transition-colors py-2 border-b border-slate-100 dark:border-slate-800 ${
+          isPhase
+            ? 'bg-slate-100/90 dark:bg-slate-800/80 font-bold'
+            : isDeliverable
+            ? 'bg-slate-50/70 dark:bg-slate-900/50 font-semibold'
+            : isTaskOnCriticalPath
+            ? 'bg-rose-50/30 dark:bg-rose-950/20'
+            : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50'
+        }`}
+        style={{
+          gridTemplateColumns: `380px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
+        }}
+      >
+        {/* Left Side: WBS Node Hierarchy Details */}
+        <div
+          onClick={() => {
+            if (hasChildren) toggleNodeCollapse(node.id);
+            else if (linkedTask) onTaskClick(linkedTask);
+          }}
+          className={`${indentClass} pr-3 text-xs border-r border-slate-200 dark:border-slate-800 flex items-center justify-between cursor-pointer group truncate`}
+        >
+          <div className="flex items-center space-x-2 truncate pr-2">
+            {hasChildren ? (
+              <span className="p-0.5 rounded hover:bg-slate-300 dark:hover:bg-slate-600 shrink-0">
+                {isCollapsed ? (
+                  <ChevronRightIcon className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                )}
+              </span>
+            ) : isMilestone ? (
+              <Diamond className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
+            ) : isTaskOnCriticalPath ? (
+              <Zap className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+            ) : (
+              <span
+                className="h-2 w-2 rounded-full shrink-0"
+                style={{ backgroundColor: STATUS_COLORS[linkedTask?.status || 'IN_PROGRESS'] || '#6366f1' }}
+              />
+            )}
+
+            {/* WBS Code Badge */}
+            <span
+              className={`font-mono text-[9px] px-1.5 py-0.2 rounded font-bold shrink-0 ${
+                isPhase
+                  ? 'bg-indigo-600 text-white'
+                  : isDeliverable
+                  ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                  : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {node.wbsCode}
+            </span>
+
+            <span className={`truncate ${isPhase ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'}`}>
+              {node.name}
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-1.5 shrink-0">
+            {linkedTask && (linkedTask.dependenciesAsSuccessor?.length ?? 0) + (linkedTask.dependenciesAsPredecessor?.length ?? 0) > 0 && (
+              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono text-slate-400">
+                <Link2 className="h-2.5 w-2.5 mr-0.5" />
+                {(linkedTask.dependenciesAsSuccessor?.length ?? 0) + (linkedTask.dependenciesAsPredecessor?.length ?? 0)}
+              </Badge>
+            )}
+            <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">
+              {node.progress}%
+            </span>
+          </div>
+        </div>
+
+        {/* Right Side: Timeline Bar Rendering */}
+        <div
+          className="relative h-7 flex items-center"
+          style={{ gridColumn: `2 / span ${totalTimelineDays}` }}
+        >
+          {isPhase ? (
+            /* WBS Phase Summary Bracket Bar */
+            <div
+              className="absolute top-1/2 -translate-y-1/2 h-3.5 bg-slate-800 dark:bg-slate-200 rounded-sm shadow-sm flex items-center overflow-hidden z-10"
+              style={{
+                left: `${leftPercent}%`,
+                width: `${widthPercent}%`,
+              }}
+              title={`Phase ${node.wbsCode} ${node.name} (${format(nodeStart, 'MMM d')} - ${format(nodeEnd, 'MMM d')}, ${node.progress}% complete)`}
+            >
+              <div className="h-full bg-indigo-600" style={{ width: `${node.progress}%` }} />
+              <div className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100 z-10 left-0" />
+              <div className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100 z-10 right-0" />
+            </div>
+          ) : isMilestone ? (
+            /* Milestone Diamond */
+            <div
+              onClick={() => linkedTask && onTaskClick(linkedTask)}
+              className="absolute top-1/2 -translate-y-1/2 cursor-pointer z-20 hover:scale-150 transition-transform"
+              style={{ left: `${leftPercent}%` }}
+              title={`Milestone: ${node.wbsCode} ${node.name} (${format(nodeStart, 'MMM d, yyyy')})`}
+            >
+              <div className="h-4 w-4 bg-amber-500 rotate-45 border-2 border-white dark:border-slate-900 shadow-md flex items-center justify-center" />
+            </div>
+          ) : (
+            /* Standard / Critical Task Bar */
+            <div
+              onClick={() => linkedTask && onTaskClick(linkedTask)}
+              className={`absolute top-1/2 -translate-y-1/2 h-4 rounded-md shadow-sm cursor-pointer transition-all hover:brightness-110 flex items-center px-1.5 overflow-hidden z-10 ${
+                isTaskOnCriticalPath
+                  ? 'bg-rose-500 text-white ring-2 ring-rose-300 dark:ring-rose-800'
+                  : 'bg-indigo-500 text-white'
+              }`}
+              style={{
+                left: `${leftPercent}%`,
+                width: `${widthPercent}%`,
+                backgroundColor: isTaskOnCriticalPath ? '#ef4444' : STATUS_COLORS[linkedTask?.status || 'IN_PROGRESS'] || '#6366f1',
+              }}
+              title={`${node.wbsCode} ${node.name} (${format(nodeStart, 'MMM d')} - ${format(nodeEnd, 'MMM d')}, ${durationDays} days)`}
+            >
+              <span className="text-[9px] font-semibold truncate leading-none drop-shadow">
+                {node.name}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recursive Children Render If Not Collapsed */}
+      {!isCollapsed &&
+        node.children &&
+        node.children.map((child) => (
+          <RecursiveWBSGanttRow
+            key={child.id}
+            node={child}
+            level={level + 1}
+            collapsedNodes={collapsedNodes}
+            toggleNodeCollapse={toggleNodeCollapse}
+            findTaskForWBSNode={findTaskForWBSNode}
+            projectStartDate={projectStartDate}
+            totalTimelineDays={totalTimelineDays}
+            showCriticalPath={showCriticalPath}
+            criticalPathTaskIds={criticalPathTaskIds}
+            zoomMode={zoomMode}
+            onTaskClick={onTaskClick}
+          />
+        ))}
+    </>
+  );
+}
+
+// ----------------------------------------------------
+// FLAT CPM TASK ROW
+// ----------------------------------------------------
+interface FlatGanttTaskRowProps {
   task: Task & { isCritical?: boolean; totalFloat?: number };
   wbsChildCode: string;
   projectStartDate: Date;
@@ -538,11 +614,10 @@ interface GanttTaskRowProps {
   showCriticalPath: boolean;
   criticalPathTaskIds: Set<string>;
   zoomMode: 'FULL_PROJECT' | 'MONTH';
-  indent?: string;
   onTaskClick: (task: Task) => void;
 }
 
-function GanttTaskRow({
+function FlatGanttTaskRow({
   task,
   wbsChildCode,
   projectStartDate,
@@ -550,9 +625,8 @@ function GanttTaskRow({
   showCriticalPath,
   criticalPathTaskIds,
   zoomMode,
-  indent = 'pl-3',
   onTaskClick,
-}: GanttTaskRowProps) {
+}: FlatGanttTaskRowProps) {
   let taskStart = task.startDate ? new Date(task.startDate) : task.dueDate ? new Date(task.dueDate) : new Date(task.createdAt);
   let taskEnd = task.dueDate ? new Date(task.dueDate) : addDays(taskStart, task.isMilestone ? 0 : 3);
 
@@ -577,16 +651,15 @@ function GanttTaskRow({
           : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50'
       }`}
       style={{
-        gridTemplateColumns: `360px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
+        gridTemplateColumns: `380px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
       }}
     >
-      {/* Left Title & Status Cell */}
       <div
         onClick={() => onTaskClick(task)}
-        className={`${indent} pr-3 text-xs font-medium text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 flex items-center justify-between cursor-pointer group`}
+        className="pl-3 pr-3 text-xs font-medium text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 flex items-center justify-between cursor-pointer group"
       >
         <div className="flex items-center space-x-2 truncate pr-2">
-          <span className="font-mono text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1 py-0.2 rounded shrink-0 font-bold">
+          <span className="font-mono text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1 py-0.2 rounded font-bold shrink-0">
             {wbsChildCode}
           </span>
           {isMilestone ? (
@@ -618,7 +691,7 @@ function GanttTaskRow({
                   ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/60'
                   : 'text-slate-400'
               }`}
-              title={`Total Float / Slack: ${task.totalFloat} days`}
+              title={`Total Float: ${task.totalFloat}d`}
             >
               {task.totalFloat}d
             </span>
@@ -626,23 +699,20 @@ function GanttTaskRow({
         </div>
       </div>
 
-      {/* Right Timeline Bar */}
       <div
         className="relative h-7 flex items-center"
         style={{ gridColumn: `2 / span ${totalTimelineDays}` }}
       >
         {isMilestone ? (
-          /* Milestone Diamond */
           <div
             onClick={() => onTaskClick(task)}
             className="absolute top-1/2 -translate-y-1/2 cursor-pointer z-20 hover:scale-150 transition-transform"
             style={{ left: `${leftPercent}%` }}
-            title={`Milestone: ${task.title} (${format(taskStart, 'MMM d, yyyy')})`}
+            title={`Milestone: ${task.title}`}
           >
             <div className="h-4 w-4 bg-amber-500 rotate-45 border-2 border-white dark:border-slate-900 shadow-md flex items-center justify-center" />
           </div>
         ) : (
-          /* Standard / Critical Task Bar */
           <div
             onClick={() => onTaskClick(task)}
             className={`absolute top-1/2 -translate-y-1/2 h-4 rounded-md shadow-sm cursor-pointer transition-all hover:brightness-110 flex items-center px-1.5 overflow-hidden z-10 ${
@@ -655,7 +725,7 @@ function GanttTaskRow({
               width: `${widthPercent}%`,
               backgroundColor: isTaskOnCriticalPath ? '#ef4444' : STATUS_COLORS[task.status] || '#6366f1',
             }}
-            title={`${task.title} (${format(taskStart, 'MMM d')} - ${format(taskEnd, 'MMM d')}, ${durationDays} days) | Status: ${task.status} | Slack: ${task.totalFloat ?? 0}d`}
+            title={`${task.title} (${durationDays} days)`}
           >
             <span className="text-[9px] font-semibold truncate leading-none drop-shadow">
               {task.title}
