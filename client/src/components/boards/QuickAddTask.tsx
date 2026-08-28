@@ -36,7 +36,8 @@ export default function QuickAddTask({ projectId, columnId, onClose }: QuickAddT
   return (
     <form onSubmit={handleSubmit} className="p-1 space-y-2">
       <Input
-        placeholder="What needs to be done?"
+        placeholder="What needs to be done? (max 200 chars)"
+        maxLength={200}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         className="text-xs h-8"
