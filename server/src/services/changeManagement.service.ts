@@ -60,6 +60,31 @@ export const updateChangeRequest = async (ecoId: string, data: any) => {
 };
 
 export const reviewChangeRequest = async (ecoId: string, approverId: string, status: ECOStatus) => {
+  const eco = await prisma.changeRequest.findUnique({ where: { id: ecoId } });
+  if (!eco) throw new AppError('Change request not found', 404);
+
+  // If approved and has schedule impact days, extend the project's active tasks and milestones
+  if ((status === 'APPROVED' || status === 'IMPLEMENTED') && eco.scheduleImpactDays !== 0) {
+    const tasksToAdjust = await prisma.task.findMany({
+      where: {
+        projectId: eco.projectId,
+        status: { in: ['TODO', 'IN_PROGRESS'] },
+        dueDate: { not: null },
+      },
+    });
+
+    for (const task of tasksToAdjust) {
+      if (task.dueDate) {
+        const newDueDate = new Date(task.dueDate);
+        newDueDate.setDate(newDueDate.getDate() + eco.scheduleImpactDays);
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { dueDate: newDueDate },
+        });
+      }
+    }
+  }
+
   return prisma.changeRequest.update({
     where: { id: ecoId },
     data: {

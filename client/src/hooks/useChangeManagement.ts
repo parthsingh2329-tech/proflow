@@ -41,7 +41,11 @@ export const useReviewChangeRequest = (projectId: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['changeRequests', projectId] });
-      toast.success('Change request status updated');
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['controls', projectId] });
+      toast.success('Change request status updated and schedule synced to Gantt!');
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to update review status');
