@@ -14,11 +14,11 @@ export default function AppShell() {
       <div
         className={cn(
           'flex min-h-screen flex-col transition-all duration-300',
-          sidebarCollapsed ? 'pl-16' : 'pl-64'
+          sidebarCollapsed ? 'pl-0 md:pl-16' : 'pl-0 md:pl-64'
         )}
       >
         <Navbar />
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-3 sm:p-6 overflow-x-hidden">
           <div className="mx-auto max-w-7xl">
             <Outlet />
           </div>

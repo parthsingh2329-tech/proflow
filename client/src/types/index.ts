@@ -99,6 +99,7 @@ export interface Task {
   lateStart?: Date;
   lateFinish?: Date;
   slack?: number;
+  totalFloat?: number;
 }
 
 export interface Label {

@@ -146,8 +146,10 @@ export default function RiskRegister({ projectId, members }: RiskRegisterProps) 
     return true;
   });
 
-  const criticalRisksCount = risks.filter((r) => r.score >= 15).length;
-  const highRisksCount = risks.filter((r) => r.score >= 10 && r.score < 15).length;
+  const activeRisks = risks.filter((r) => r.status === 'OPEN' || r.status === 'MITIGATING');
+  const closedRisksCount = risks.filter((r) => r.status === 'CLOSED' || r.status === 'ACCEPTED').length;
+  const criticalRisksCount = activeRisks.filter((r) => r.score >= 15).length;
+  const highRisksCount = activeRisks.filter((r) => r.score >= 10 && r.score < 15).length;
 
   return (
     <div className="space-y-6">
@@ -274,7 +276,8 @@ export default function RiskRegister({ projectId, members }: RiskRegisterProps) 
           <Card className="p-4 shadow-sm border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase">Total Active Risks</p>
-              <h4 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{risks.length}</h4>
+              <h4 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{activeRisks.length}</h4>
+              <span className="text-[10px] text-slate-400 mt-0.5 block">{closedRisksCount} closed / mitigated</span>
             </div>
             <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
               <ShieldAlert className="h-6 w-6" />

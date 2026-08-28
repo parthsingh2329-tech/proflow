@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -8,7 +8,8 @@ import {
   Plus, 
   Layers, 
   CheckSquare, 
-  ChevronRight 
+  ChevronRight,
+  X
 } from 'lucide-react';
 import useUiStore from '@/stores/uiStore';
 import { useProjects } from '@/hooks/useProjects';
@@ -17,7 +18,7 @@ import CreateProjectDialog from '@/components/projects/CreateProjectDialog';
 import { cn } from '@/lib/utils';
 
 export default function Sidebar() {
-  const { sidebarCollapsed } = useUiStore();
+  const { sidebarCollapsed, toggleSidebar } = useUiStore();
   const { data: projects = [] } = useProjects();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
@@ -30,29 +31,48 @@ export default function Sidebar() {
 
   return (
     <>
+      {/* Mobile Backdrop */}
+      {!sidebarCollapsed && (
+        <div
+          className="fixed inset-0 z-35 bg-black/50 backdrop-blur-sm md:hidden cursor-pointer"
+          onClick={toggleSidebar}
+        />
+      )}
+
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-40 flex flex-col border-r border-slate-200 bg-white transition-all duration-300 dark:border-slate-800 dark:bg-slate-950',
-          sidebarCollapsed ? 'w-16' : 'w-64'
+          // Desktop sizing
+          sidebarCollapsed ? 'md:w-16 -translate-x-full md:translate-x-0' : 'w-64 translate-x-0'
         )}
       >
         {/* Brand Header */}
-        <div className="flex h-16 items-center px-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex h-16 items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center space-x-3 overflow-hidden">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold">
               <CheckSquare className="h-5 w-5" />
             </div>
-            {!sidebarCollapsed && (
+            {(!sidebarCollapsed || window.innerWidth < 768) && (
               <div className="flex flex-col">
                 <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white leading-none">
                   ProFlow
                 </span>
                 <span className="text-[10px] text-slate-400 font-medium leading-none mt-1">
-                  Project Workspace
+                  Automotive EV Suite
                 </span>
               </div>
             )}
           </div>
+
+          {/* Mobile close button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className="md:hidden h-8 w-8 text-slate-400"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Main Navigation */}
@@ -64,52 +84,48 @@ export default function Sidebar() {
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center space-x-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    'flex items-center space-x-3 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all',
                     isActive
-                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 font-semibold'
+                      ? 'bg-indigo-50 text-indigo-600 shadow-xs dark:bg-indigo-950/80 dark:text-indigo-400'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-200'
                   )
                 }
-                title={sidebarCollapsed ? item.label : undefined}
               >
-                <item.icon className="h-5 w-5 shrink-0" />
-                {!sidebarCollapsed && <span>{item.label}</span>}
+                <item.icon className="h-4 w-4 shrink-0" />
+                {(!sidebarCollapsed || window.innerWidth < 768) && <span>{item.label}</span>}
               </NavLink>
             ))}
           </nav>
 
-          {/* Projects Quick List */}
-          {!sidebarCollapsed && (
+          {/* Projects Navigation */}
+          {(!sidebarCollapsed || window.innerWidth < 768) && (
             <div className="space-y-2">
               <div className="flex items-center justify-between px-3">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  My Projects
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Active Projects ({projects.length})
                 </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <button
                   onClick={() => setCreateProjectOpen(true)}
-                  className="h-6 w-6 text-slate-400 hover:text-slate-900"
-                  title="New project"
+                  className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-900"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                </Button>
+                </button>
               </div>
 
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {projects.length === 0 ? (
-                  <p className="px-3 text-xs text-slate-400 py-2">No projects yet</p>
+                  <p className="px-3 text-xs text-slate-400 italic">No projects yet</p>
                 ) : (
-                  projects.slice(0, 8).map((proj) => (
+                  projects.map((proj: any) => (
                     <NavLink
                       key={proj.id}
                       to={`/projects/${proj.id}`}
                       className={({ isActive }) =>
                         cn(
-                          'flex items-center space-x-2.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                          'flex items-center space-x-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-all group',
                           isActive
-                            ? 'bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-semibold'
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900/50'
+                            ? 'bg-slate-100 text-indigo-600 font-semibold dark:bg-slate-800 dark:text-indigo-400'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-slate-200'
                         )
                       }
                     >
@@ -127,7 +143,7 @@ export default function Sidebar() {
         </div>
 
         {/* Footer Quick Action */}
-        {!sidebarCollapsed && (
+        {(!sidebarCollapsed || window.innerWidth < 768) && (
           <div className="p-3 border-t border-slate-200 dark:border-slate-800">
             <Button
               variant="outline"

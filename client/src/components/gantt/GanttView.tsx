@@ -27,8 +27,10 @@ import {
   Minimize2,
   Clock,
   HelpCircle,
-  Activity
+  Activity,
+  Download
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -275,6 +277,42 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
               <span>Total Float / Slack</span>
             </label>
           </div>
+
+          {/* Export Schedule CSV */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const rows = [
+                ['WBS Code', 'Activity Title', 'Start Date', 'Target Due Date', 'Status', 'Priority', 'Total Float / Slack (Days)', 'Critical Path', 'Dependencies Count'],
+                ...cpmTasks.map((t) => [
+                  t.wbsNode?.wbsCode || '',
+                  `"${t.title.replace(/"/g, '""')}"`,
+                  t.startDate ? format(new Date(t.startDate), 'yyyy-MM-dd') : '',
+                  t.dueDate ? format(new Date(t.dueDate), 'yyyy-MM-dd') : '',
+                  t.status,
+                  t.priority,
+                  t.slack ?? t.totalFloat ?? 0,
+                  t.isCritical ? 'YES' : 'NO',
+                  (t.dependenciesAsSuccessor?.length ?? 0) + (t.dependenciesAsPredecessor?.length ?? 0),
+                ]),
+              ];
+              const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement('a');
+              link.setAttribute('href', encodedUri);
+              link.setAttribute('download', `Project_CPM_Schedule_${new Date().toISOString().split('T')[0]}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              toast.success('CPM schedule exported to CSV');
+            }}
+            className="text-[11px] h-7 px-2.5 space-x-1"
+            title="Export full CPM schedule to CSV spreadsheet"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Export CSV</span>
+          </Button>
 
           {/* Month Navigation in Zoom Mode */}
           {zoomMode === 'MONTH' && (

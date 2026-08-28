@@ -5,6 +5,13 @@ import { TaskStatus } from '@prisma/client';
 export const createTask = async (data: any, reporterId: string) => {
   let { columnId, projectId, ...rest } = data;
 
+  if (rest.startDate && rest.dueDate && new Date(rest.dueDate) < new Date(rest.startDate)) {
+    throw new AppError('Due date cannot precede start date', 400);
+  }
+  if (rest.estimatedHours !== undefined && Number(rest.estimatedHours) < 0) {
+    throw new AppError('Estimated hours cannot be negative', 400);
+  }
+
   if (columnId && !projectId) {
     const col = await prisma.column.findUnique({
       where: { id: columnId },
@@ -110,6 +117,19 @@ export const getTaskById = async (taskId: string) => {
 };
 
 export const updateTask = async (taskId: string, data: any) => {
+  const existing = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!existing) throw new AppError('Task not found', 404);
+
+  const finalStart = data.startDate ? new Date(data.startDate) : existing.startDate;
+  const finalDue = data.dueDate ? new Date(data.dueDate) : existing.dueDate;
+
+  if (finalStart && finalDue && finalDue < finalStart) {
+    throw new AppError('Due date cannot precede start date', 400);
+  }
+  if (data.estimatedHours !== undefined && Number(data.estimatedHours) < 0) {
+    throw new AppError('Estimated hours cannot be negative', 400);
+  }
+
   if (data.status === TaskStatus.DONE) {
     data.completedAt = new Date();
   } else if (data.status && data.status !== TaskStatus.DONE) {
@@ -164,6 +184,32 @@ export const addDependency = async (data: { successorId: string; predecessorId: 
   if (successorId === predecessorId) {
     throw new AppError('A task cannot depend on itself', 400);
   }
+
+  // Circular Dependency Detection (DFS Cycle Check)
+  const successorTask = await prisma.task.findUnique({ where: { id: successorId } });
+  if (!successorTask) throw new AppError('Successor task not found', 404);
+
+  const allDependencies = await prisma.taskDependency.findMany({
+    where: {
+      predecessor: { projectId: successorTask.projectId },
+    },
+  });
+
+  // Check if predecessorId can already reach successorId (which would mean successorId -> predecessorId creates a cycle)
+  const visited = new Set<string>();
+  const stack = [successorId];
+  while (stack.length > 0) {
+    const curr = stack.pop()!;
+    if (curr === predecessorId) {
+      throw new AppError('Circular dependency detected: Adding this link creates a closed loop in the project CPM schedule.', 400);
+    }
+    if (!visited.has(curr)) {
+      visited.add(curr);
+      const nextSuccessors = allDependencies.filter(d => d.predecessorId === curr).map(d => d.successorId);
+      stack.push(...nextSuccessors);
+    }
+  }
+
   return prisma.taskDependency.upsert({
     where: {
       predecessorId_successorId: { predecessorId, successorId },
@@ -182,3 +228,4 @@ export const removeDependency = async (dependencyId: string) => {
     where: { id: dependencyId },
   });
 };
+

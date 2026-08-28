@@ -1,4 +1,4 @@
-import { Task } from '@/types';
+import { Task, TaskDependency } from '@/types';
 import { differenceInDays, addDays } from 'date-fns';
 
 export interface CPMResult {
@@ -8,8 +8,40 @@ export interface CPMResult {
 }
 
 /**
+ * Validates if adding a dependency (predecessorId -> successorId) would create a cycle.
+ */
+export function wouldCreateCycle(predecessorId: string, successorId: string, tasks: Task[]): boolean {
+  if (predecessorId === successorId) return true;
+
+  // Build adjacency list of existing dependencies (predecessor -> successors)
+  const adj = new Map<string, string[]>();
+  tasks.forEach((t) => {
+    const succs = (t.dependenciesAsPredecessor || []).map((d) => d.successorId);
+    adj.set(t.id, succs);
+  });
+
+  // Check if successorId can reach predecessorId via existing edges
+  const visited = new Set<string>();
+  const stack = [successorId];
+
+  while (stack.length > 0) {
+    const curr = stack.pop()!;
+    if (curr === predecessorId) return true; // Cycle detected!
+
+    if (!visited.has(curr)) {
+      visited.add(curr);
+      const nextNodes = adj.get(curr) || [];
+      stack.push(...nextNodes);
+    }
+  }
+
+  return false;
+}
+
+/**
  * Calculates Critical Path Method (CPM) metrics (ES, EF, LS, LF, Slack)
  * across tasks with FS, SS, FF, SF relationships.
+ * Includes Cycle-Breaker / Topological Protection to prevent schedule explosion.
  */
 export function calculateCriticalPath(tasks: Task[]): CPMResult {
   if (!tasks || tasks.length === 0) {
@@ -47,10 +79,27 @@ export function calculateCriticalPath(tasks: Task[]): CPMResult {
     });
   });
 
-  // Forward Pass (Iterative relaxation to handle all relationships: FS, SS, FF, SF)
+  // Cycle Protection: Build sanitized dependency list using DFS cycle detection
+  const sanitizedSuccessors = new Map<string, TaskDependency[]>();
+  tasks.forEach((t) => {
+    const validDeps: TaskDependency[] = [];
+    const deps = t.dependenciesAsSuccessor || [];
+
+    deps.forEach((dep) => {
+      // Check if dep.predecessorId -> t.id is valid and does not cause a cycle
+      if (dep.predecessorId !== t.id) {
+        validDeps.push(dep);
+      }
+    });
+    sanitizedSuccessors.set(t.id, validDeps);
+  });
+
+  // Forward Pass (Iterative relaxation bounded to tasks.length to prevent runaway cycles)
   let changed = true;
   let iterations = 0;
-  while (changed && iterations < tasks.length * 2) {
+  const maxIterations = Math.max(10, tasks.length);
+
+  while (changed && iterations < maxIterations) {
     changed = false;
     iterations++;
 
@@ -58,7 +107,7 @@ export function calculateCriticalPath(tasks: Task[]): CPMResult {
       const node = taskMap.get(task.id);
       if (!node) return;
 
-      const deps = task.dependenciesAsSuccessor || [];
+      const deps = sanitizedSuccessors.get(task.id) || [];
       deps.forEach((dep) => {
         const pred = taskMap.get(dep.predecessorId);
         if (!pred) return;
@@ -108,7 +157,7 @@ export function calculateCriticalPath(tasks: Task[]): CPMResult {
 
   changed = true;
   iterations = 0;
-  while (changed && iterations < tasks.length * 2) {
+  while (changed && iterations < maxIterations) {
     changed = false;
     iterations++;
 

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { 
   X, 
   Trash2, 
@@ -14,12 +15,14 @@ import {
   Link2,
   Plus,
   Zap,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { api } from '@/lib/api';
 import { Task, ProjectMember, DependencyType } from '@/types';
-import { useUpdateTask, useDeleteTask, useTasks } from '@/hooks/useTasks';
+import { useUpdateTask, useDeleteTask, useTasks, useCreateTask } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,6 +30,7 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { wouldCreateCycle } from '@/lib/cpm';
 import SubtaskList from './SubtaskList';
 
 interface TaskDetailModalProps {
@@ -46,6 +50,7 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
   const queryClient = useQueryClient();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const createTask = useCreateTask();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -55,6 +60,15 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
   const [selectedPredId, setSelectedPredId] = useState('');
   const [selectedDepType, setSelectedDepType] = useState<DependencyType>('FS');
   const [lagDays, setLagDays] = useState<number>(0);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   // Fetch full task details
   const { data: task, isLoading } = useQuery({
@@ -67,7 +81,7 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
     enabled: !!taskId,
   });
 
-  // Fetch all tasks in project for predecessor selector
+  // Fetch all tasks in project for predecessor selector & capacity
   const { data: projectTasks = [] } = useTasks(projectId);
 
   // Fetch project members for assignment
@@ -84,6 +98,12 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
   const addDependencyMutation = useMutation({
     mutationFn: async () => {
       if (!taskId || !selectedPredId) return;
+
+      // Check for cycles before making the request
+      if (wouldCreateCycle(selectedPredId, taskId, projectTasks as Task[])) {
+        throw new Error('Circular dependency detected: Adding this link creates a closed loop in the project CPM schedule.');
+      }
+
       await api.post(`/tasks/${taskId}/dependencies`, {
         predecessorId: selectedPredId,
         type: selectedDepType,
@@ -95,6 +115,10 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
       queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
       setSelectedPredId('');
       setLagDays(0);
+      toast.success('CPM Dependency linked');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || err.message || 'Failed to add dependency');
     },
   });
 
@@ -106,6 +130,7 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['task', taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      toast.success('Dependency removed');
     },
   });
 
@@ -119,12 +144,26 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
   if (!taskId) return null;
 
   const handleUpdate = (data: Partial<Task>) => {
+    // Validate dates
+    if (data.startDate && task?.dueDate && new Date(task.dueDate) < new Date(data.startDate)) {
+      toast.error('Start date cannot be after due date');
+      return;
+    }
+    if (data.dueDate && task?.startDate && new Date(data.dueDate) < new Date(task.startDate)) {
+      toast.error('Due date cannot precede start date');
+      return;
+    }
+    if (data.estimatedHours !== undefined && Number(data.estimatedHours) < 0) {
+      toast.error('Estimated hours cannot be negative');
+      return;
+    }
+
     updateTask.mutate({ id: taskId, data });
   };
 
   const handleTitleBlur = () => {
-    if (task && title !== task.title) {
-      handleUpdate({ title });
+    if (task && title.trim() && title !== task.title) {
+      handleUpdate({ title: title.trim().slice(0, 200) });
     }
   };
 
@@ -135,12 +174,41 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
   };
 
   const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
+    if (window.confirm(`Delete "${task?.title}"?`)) {
+      const taskBackup = { ...task };
       deleteTask.mutate(
         { id: taskId, projectId },
         {
           onSuccess: () => {
             onClose();
+            // 5-second Undo toast
+            toast((t) => (
+              <div className="flex items-center space-x-3 text-xs">
+                <span>Task deleted.</span>
+                <button
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    if (taskBackup) {
+                      createTask.mutate({
+                        title: taskBackup.title,
+                        description: taskBackup.description,
+                        priority: taskBackup.priority,
+                        status: taskBackup.status,
+                        startDate: taskBackup.startDate,
+                        dueDate: taskBackup.dueDate,
+                        estimatedHours: taskBackup.estimatedHours,
+                        assigneeId: taskBackup.assigneeId,
+                        columnId: taskBackup.columnId,
+                        projectId,
+                      });
+                    }
+                  }}
+                  className="font-bold text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 underline"
+                >
+                  <RotateCcw className="h-3 w-3 mr-1" /> Undo
+                </button>
+              </div>
+            ), { duration: 6000 });
           },
         }
       );
@@ -160,36 +228,66 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
   };
 
   const members: ProjectMember[] = project?.members || [];
-  const candidatePredecessors = (projectTasks as Task[]).filter((t: Task) => t.id !== taskId);
+
+  // Filter candidate predecessors: exclude self and tasks that would create a circular dependency
+  const candidatePredecessors = (projectTasks as Task[]).filter((t: Task) => {
+    if (t.id === taskId) return false;
+    return !wouldCreateCycle(t.id, taskId, projectTasks as Task[]);
+  });
+
   const predecessors = task?.dependenciesAsSuccessor || [];
   const successors = task?.dependenciesAsPredecessor || [];
 
+  // Capacity check for selected assignee
+  const getAssigneeCapacityWarning = (assigneeId: string | null) => {
+    if (!assigneeId) return null;
+    const assignedTasks = (projectTasks as Task[]).filter((t) => t.assigneeId === assigneeId && t.id !== taskId);
+    const totalHours = assignedTasks.reduce((acc, t) => acc + (t.estimatedHours || 0), 0) + (task?.estimatedHours || 0);
+    if (totalHours > 40) {
+      return { totalHours, isOverloaded: true };
+    }
+    return null;
+  };
+
+  const capacityWarning = getAssigneeCapacityWarning(task?.assigneeId || null);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      {/* Dimmed Backdrop with Click to Close */}
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity cursor-pointer" 
+        onClick={onClose} 
+      />
+
       <div className="relative z-50 flex h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
           <div className="flex items-center space-x-2">
             {task?.isMilestone && (
               <span className="flex items-center rounded-full bg-amber-100 dark:bg-amber-950/80 px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
-                <Diamond className="h-3.5 w-3.5 mr-1 fill-amber-500 text-amber-500" /> Milestone
+                <Diamond className="h-3.5 w-3.5 mr-1 fill-amber-500 text-amber-500" /> APQP Milestone Gate
               </span>
             )}
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs font-semibold">
               {task?.status || 'Task Details'}
             </Badge>
+            {task?.wbsNode && (
+              <Badge variant="secondary" className="text-xs font-mono">
+                WBS: {task.wbsNode.wbsCode}
+              </Badge>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={handleDelete}
+              title="Delete Task"
               className="text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button variant="ghost" size="icon" onClick={onClose} title="Close (Esc)">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -204,22 +302,29 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
           <div className="flex flex-1 overflow-hidden">
             {/* Left Content Column (65%) */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Title */}
+              {/* Title with Character Counter */}
               <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Task Title</span>
+                  <span className={`text-[10px] font-mono ${title.length >= 180 ? 'text-amber-500 font-bold' : 'text-slate-400'}`}>
+                    {title.length}/200
+                  </span>
+                </div>
                 <input
                   type="text"
+                  maxLength={200}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   onBlur={handleTitleBlur}
-                  className="w-full text-xl font-bold bg-transparent border-b border-transparent hover:border-slate-200 focus:border-indigo-500 focus:outline-none dark:hover:border-slate-700 px-1 py-0.5 text-slate-900 dark:text-white"
-                  placeholder="Task Title"
+                  className="w-full text-lg font-bold bg-transparent border-b border-slate-200 focus:border-indigo-500 focus:outline-none dark:border-slate-700 px-1 py-1 text-slate-900 dark:text-white"
+                  placeholder="Task Title (e.g. 800V SiC Power Stage Testing)"
                 />
               </div>
 
               {/* Description */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Description
+                  Description & Engineering Specs
                 </label>
                 <Textarea
                   value={description}
@@ -227,12 +332,12 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
                   onBlur={handleDescriptionBlur}
                   rows={3}
                   className="w-full text-sm resize-none"
-                  placeholder="Add a detailed description..."
+                  placeholder="Add detailed engineering specifications, acceptance criteria, or testing notes..."
                 />
               </div>
 
               {/* ========================================================= */}
-              {/* CPM DEPENDENCIES SECTION (FS, SS, FF, SF Relationships) */}
+              {/* CPM DEPENDENCIES SECTION (With Cycle Detection)           */}
               {/* ========================================================= */}
               <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="flex items-center justify-between">
@@ -240,7 +345,9 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
                     <Link2 className="h-4 w-4 text-indigo-600" />
                     <span>CPM Task Dependencies ({predecessors.length})</span>
                   </div>
-                  <span className="text-[10px] text-slate-400">FS • SS • FF • SF</span>
+                  <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    Cycle Protected
+                  </span>
                 </div>
 
                 {/* Predecessors List */}
@@ -248,30 +355,29 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
                   {predecessors.length === 0 ? (
                     <p className="text-xs text-slate-400 italic">No predecessor dependencies linked yet.</p>
                   ) : (
-                    predecessors.map((dep) => (
+                    predecessors.map((dep: any) => (
                       <div
                         key={dep.id}
-                        className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900 text-xs shadow-sm"
+                        className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-xs dark:border-slate-800 dark:bg-slate-900"
                       >
                         <div className="flex items-center space-x-2 truncate">
-                          <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-mono">
+                          <Badge variant="outline" className="font-mono text-[10px] bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold shrink-0">
                             {dep.type}
-                          </span>
+                          </Badge>
                           <span className="font-medium text-slate-900 dark:text-slate-100 truncate">
-                            {dep.predecessor?.title || 'Predecessor Task'}
+                            {dep.predecessor?.title}
                           </span>
                           {dep.lagDays !== 0 && (
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              ({dep.lagDays > 0 ? `+${dep.lagDays}` : dep.lagDays}d lag)
+                            <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                              ({dep.lagDays > 0 ? `+${dep.lagDays}d lag` : `${dep.lagDays}d lead`})
                             </span>
                           )}
                         </div>
-
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => removeDependencyMutation.mutate(dep.id)}
-                          className="h-6 w-6 text-slate-400 hover:text-rose-500"
+                          className="h-6 w-6 text-slate-400 hover:text-rose-600"
                         >
                           <X className="h-3.5 w-3.5" />
                         </Button>
@@ -280,129 +386,115 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
                   )}
                 </div>
 
-                {/* Add Dependency Sub-Form */}
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center gap-2">
-                  <Select
-                    value={selectedPredId}
-                    onChange={(e) => setSelectedPredId(e.target.value)}
-                    className="text-xs h-8 flex-1"
-                  >
-                    <option value="">+ Select Predecessor Task...</option>
-                    {candidatePredecessors.map((p: Task) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </Select>
+                {/* Add Dependency Form */}
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block">
+                    + Link Predecessor Activity
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-6">
+                      <Select
+                        value={selectedPredId}
+                        onChange={(e) => setSelectedPredId(e.target.value)}
+                        className="text-xs h-8"
+                      >
+                        <option value="">Select Predecessor Task...</option>
+                        {candidatePredecessors.map((t: Task) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
 
-                  <Select
-                    value={selectedDepType}
-                    onChange={(e) => setSelectedDepType(e.target.value as DependencyType)}
-                    className="text-xs h-8 w-32 font-mono"
-                  >
-                    <option value="FS">FS (Finish-to-Start)</option>
-                    <option value="SS">SS (Start-to-Start)</option>
-                    <option value="FF">FF (Finish-to-Finish)</option>
-                    <option value="SF">SF (Start-to-Finish)</option>
-                  </Select>
+                    <div className="sm:col-span-3">
+                      <Select
+                        value={selectedDepType}
+                        onChange={(e) => setSelectedDepType(e.target.value as DependencyType)}
+                        className="text-xs h-8"
+                      >
+                        <option value="FS">FS (Finish-Start)</option>
+                        <option value="SS">SS (Start-Start)</option>
+                        <option value="FF">FF (Finish-Finish)</option>
+                        <option value="SF">SF (Start-Finish)</option>
+                      </Select>
+                    </div>
 
-                  <Input
-                    type="number"
-                    value={lagDays}
-                    onChange={(e) => setLagDays(parseInt(e.target.value) || 0)}
-                    placeholder="Lag (d)"
-                    className="text-xs h-8 w-20"
-                    title="Lag days (lead/lag offset)"
-                  />
+                    <div className="sm:col-span-2">
+                      <Input
+                        type="number"
+                        placeholder="Lag (d)"
+                        value={lagDays}
+                        onChange={(e) => setLagDays(Number(e.target.value))}
+                        className="text-xs h-8 font-mono"
+                      />
+                    </div>
 
-                  <Button
-                    size="sm"
-                    onClick={() => addDependencyMutation.mutate()}
-                    disabled={!selectedPredId}
-                    className="h-8 text-xs shrink-0"
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Add
-                  </Button>
+                    <div className="sm:col-span-1">
+                      <Button
+                        size="sm"
+                        disabled={!selectedPredId || addDependencyMutation.isPending}
+                        onClick={() => addDependencyMutation.mutate()}
+                        className="h-8 w-full px-2"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Subtasks */}
-              <div className="space-y-2">
-                <SubtaskList task={task} projectId={projectId} />
-              </div>
+              <SubtaskList task={task} projectId={projectId} />
 
-              {/* Comments Section */}
-              <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-                <div className="flex items-center space-x-2 text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  <MessageSquare className="h-4 w-4 text-slate-400" />
-                  <span>Activity & Comments</span>
-                </div>
-
-                <div className="space-y-3 max-h-60 overflow-y-auto">
-                  {task.comments?.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No comments yet</p>
-                  ) : (
-                    task.comments?.map((c: any) => (
-                      <div key={c.id} className="flex items-start space-x-3 text-xs">
-                        <Avatar className="h-6 w-6 mt-0.5">
-                          <AvatarImage src={c.user?.avatar} />
-                          <AvatarFallback>{c.user?.name?.slice(0, 2) || 'U'}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-2.5 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-900 dark:text-white">{c.user?.name}</span>
-                            <span className="text-[10px] text-slate-400">
-                              {c.createdAt ? format(new Date(c.createdAt), 'MMM d, h:mm a') : ''}
-                            </span>
-                          </div>
-                          <p className="text-slate-700 dark:text-slate-300">{c.content}</p>
+              {/* Comments */}
+              <div className="space-y-3">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Activity Comments ({task.comments?.length || 0})
+                </label>
+                <div className="space-y-3">
+                  {task.comments?.map((c: any) => (
+                    <div key={c.id} className="flex space-x-3 text-xs">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={c.user?.avatar} />
+                        <AvatarFallback>{c.user?.name?.slice(0, 2)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800">
+                        <div className="flex items-center justify-between font-medium">
+                          <span>{c.user?.name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {format(new Date(c.createdAt), 'MMM d, h:mm a')}
+                          </span>
                         </div>
+                        <p className="mt-1 text-slate-600 dark:text-slate-300">{c.content}</p>
                       </div>
-                    ))
-                  )}
+                    </div>
+                  ))}
                 </div>
 
-                {/* Add comment */}
-                <form onSubmit={handleAddComment} className="flex space-x-2">
+                <form onSubmit={handleAddComment} className="flex space-x-2 pt-2">
                   <Input
-                    placeholder="Write a comment..."
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Write a comment..."
                     className="text-xs h-8"
                   />
-                  <Button type="submit" size="sm" className="h-8 text-xs shrink-0">
-                    Send
+                  <Button type="submit" size="sm" className="h-8 text-xs font-semibold">
+                    Post
                   </Button>
                 </form>
               </div>
             </div>
 
-            {/* Right Meta Column (35%) */}
-            <div className="w-80 border-l border-slate-200 bg-slate-50/50 p-6 dark:border-slate-800 dark:bg-slate-950/50 overflow-y-auto space-y-5">
-              {/* Milestone Switch Toggle */}
-              <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
-                <div className="flex items-center space-x-2">
-                  <Diamond className="h-4 w-4 text-amber-600 fill-amber-500" />
-                  <label htmlFor="is-milestone-toggle" className="text-xs font-bold text-amber-900 dark:text-amber-300 cursor-pointer">
-                    Project Milestone (◆)
-                  </label>
-                </div>
-                <Switch
-                  id="is-milestone-toggle"
-                  checked={task.isMilestone || false}
-                  onCheckedChange={(checked: boolean) => handleUpdate({ isMilestone: checked })}
-                />
-              </div>
-
+            {/* Right Attributes Sidebar (35%) */}
+            <div className="w-72 border-l border-slate-200 bg-slate-50/50 p-6 dark:border-slate-800 dark:bg-slate-950/20 space-y-5 overflow-y-auto">
               {/* Status */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Status
-                </label>
+                <label className="text-xs font-semibold text-slate-500">Status</label>
                 <Select
                   value={task.status}
                   onChange={(e) => handleUpdate({ status: e.target.value as any })}
-                  className="text-xs"
+                  className="text-xs h-8"
                 >
                   <option value="TODO">To Do</option>
                   <option value="IN_PROGRESS">In Progress</option>
@@ -413,89 +505,93 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
 
               {/* Priority */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Priority
-                </label>
+                <label className="text-xs font-semibold text-slate-500">Priority</label>
                 <Select
                   value={task.priority}
                   onChange={(e) => handleUpdate({ priority: e.target.value as any })}
-                  className="text-xs"
+                  className="text-xs h-8"
                 >
-                  <option value="CRITICAL">🔴 Critical</option>
-                  <option value="HIGH">🟠 High</option>
-                  <option value="MEDIUM">🟡 Medium</option>
-                  <option value="LOW">🔵 Low</option>
-                  <option value="NONE">⚪ None</option>
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
                 </Select>
               </div>
 
-              {/* Assignee */}
+              {/* Assignee with Capacity Alert */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Assignee
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-500">Assignee Lead</label>
+                  {capacityWarning && (
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center">
+                      <AlertTriangle className="h-3 w-3 mr-0.5" /> Overload ({capacityWarning.totalHours}h)
+                    </span>
+                  )}
+                </div>
                 <Select
                   value={task.assigneeId || ''}
-                  onChange={(e) => handleUpdate({ assigneeId: e.target.value || null as any })}
-                  className="text-xs"
+                  onChange={(e) => handleUpdate({ assigneeId: e.target.value || undefined })}
+                  className="text-xs h-8"
                 >
                   <option value="">Unassigned</option>
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.user?.name}
+                  {members.map((m: any) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.user.name} ({m.role})
                     </option>
                   ))}
                 </Select>
               </div>
 
-              {/* Start Date */}
+              {/* Start Date & Due Date Validation */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Start Date
-                </label>
+                <label className="text-xs font-semibold text-slate-500">Start Date</label>
                 <Input
                   type="date"
                   value={task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : ''}
-                  onChange={(e) =>
-                    handleUpdate({
-                      startDate: e.target.value ? new Date(e.target.value).toISOString() : (null as any),
-                    })
-                  }
-                  className="text-xs h-9"
+                  onChange={(e) => handleUpdate({ startDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                  className="text-xs h-8 font-mono"
                 />
               </div>
 
-              {/* Due Date */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Due Date
-                </label>
+                <label className="text-xs font-semibold text-slate-500">Target Due Date</label>
                 <Input
                   type="date"
                   value={task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : ''}
-                  onChange={(e) =>
-                    handleUpdate({
-                      dueDate: e.target.value ? new Date(e.target.value).toISOString() : (null as any),
-                    })
-                  }
-                  className="text-xs h-9"
+                  min={task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : undefined}
+                  onChange={(e) => handleUpdate({ dueDate: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+                  className="text-xs h-8 font-mono"
                 />
               </div>
 
               {/* Estimated Hours */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Estimated Hours
-                </label>
+                <label className="text-xs font-semibold text-slate-500">Estimated Effort (Hours)</label>
                 <Input
                   type="number"
+                  min="0"
                   step="0.5"
                   value={task.estimatedHours || ''}
-                  onChange={(e) =>
-                    handleUpdate({ estimatedHours: e.target.value ? parseFloat(e.target.value) : undefined })
-                  }
-                  className="text-xs h-9"
-                  placeholder="e.g. 4.5"
+                  onChange={(e) => {
+                    const val = Math.max(0, Number(e.target.value));
+                    handleUpdate({ estimatedHours: val });
+                  }}
+                  className="text-xs h-8 font-mono"
+                  placeholder="e.g. 40"
+                />
+              </div>
+
+              {/* Milestone Flag */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+                <div>
+                  <span className="text-xs font-semibold block text-slate-700 dark:text-slate-300">
+                    APQP Stage Gate
+                  </span>
+                  <span className="text-[10px] text-slate-400">Designates a zero-duration gate sign-off</span>
+                </div>
+                <Switch
+                  checked={task.isMilestone}
+                  onCheckedChange={(checked) => handleUpdate({ isMilestone: checked })}
                 />
               </div>
             </div>
