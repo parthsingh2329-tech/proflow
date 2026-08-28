@@ -1195,6 +1195,245 @@ async function main() {
     },
   });
 
+  // Work Packages under 2.1
+  const wbs2_1_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv2_1.id,
+      wbsCode: '2.1.1',
+      name: 'Active Aero Air Suspension Tuning & Underbody Venturi Channels',
+      nodeType: 'WORK_PACKAGE',
+      order: 0,
+      progress: 40,
+      plannedCost: 20000000,
+      actualCost: 18000000,
+      ownerId: chassisLead.id,
+      startDate: new Date('2026-03-20'),
+      dueDate: new Date('2026-04-30'),
+    },
+  });
+
+  const wbs2_1_2 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv2_1.id,
+      wbsCode: '2.1.2',
+      name: 'Dual-Motor Torque Vectoring & Electronic Stability Control (ESC)',
+      nodeType: 'WORK_PACKAGE',
+      order: 1,
+      progress: 30,
+      plannedCost: 20000000,
+      actualCost: 17000000,
+      ownerId: chassisLead.id,
+      startDate: new Date('2026-05-01'),
+      dueDate: new Date('2026-06-30'),
+    },
+  });
+
+  // Work Packages under 2.2
+  const wbs2_2_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv2_2.id,
+      wbsCode: '2.2.1',
+      name: 'LiDAR + 8MP Camera Array Calibration',
+      nodeType: 'WORK_PACKAGE',
+      order: 0,
+      progress: 80,
+      plannedCost: 15000000,
+      actualCost: 10000000,
+      ownerId: adasEngineer.id,
+      startDate: new Date('2026-02-15'),
+      dueDate: new Date('2026-04-15'),
+    },
+  });
+
+  const wbs2_2_2 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv2_2.id,
+      wbsCode: '2.2.2',
+      name: 'Solid-State LiDAR Point Cloud Sensor Fusion',
+      nodeType: 'WORK_PACKAGE',
+      order: 1,
+      progress: 40,
+      plannedCost: 10000000,
+      actualCost: 6650000,
+      ownerId: adasEngineer.id,
+      startDate: new Date('2026-04-01'),
+      dueDate: new Date('2026-05-30'),
+    },
+  });
+
+  // Phase 3.0
+  const phase3 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      wbsCode: '3.0',
+      name: 'Body-in-White & Tooling Infrastructure',
+      nodeType: 'PHASE',
+      order: 2,
+      progress: 60,
+      plannedCost: 55000000,
+      actualCost: 42000000,
+      ownerId: mfgLead.id,
+      startDate: new Date('2026-03-01'),
+      dueDate: new Date('2026-10-30'),
+    },
+  });
+
+  const deliv3_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: phase3.id,
+      wbsCode: '3.1',
+      name: 'Mega-Casting Structural Manufacturing',
+      nodeType: 'DELIVERABLE',
+      order: 0,
+      progress: 60,
+      plannedCost: 55000000,
+      actualCost: 42000000,
+      ownerId: mfgLead.id,
+      startDate: new Date('2026-03-01'),
+      dueDate: new Date('2026-10-30'),
+    },
+  });
+
+  const wbs3_1_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv3_1.id,
+      wbsCode: '3.1.1',
+      name: 'Idra 9,000-Ton Giga Press Rear Monocoque Die Tooling Release',
+      nodeType: 'WORK_PACKAGE',
+      order: 0,
+      progress: 60,
+      plannedCost: 35000000,
+      actualCost: 28000000,
+      ownerId: mfgLead.id,
+      startDate: new Date('2026-03-01'),
+      dueDate: new Date('2026-06-15'),
+    },
+  });
+
+  const wbs3_1_2 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv3_1.id,
+      wbsCode: '3.1.2',
+      name: 'Final Assembly Line Takt Time Validation',
+      nodeType: 'WORK_PACKAGE',
+      order: 1,
+      progress: 20,
+      plannedCost: 20000000,
+      actualCost: 14000000,
+      ownerId: mfgLead.id,
+      startDate: new Date('2026-07-01'),
+      dueDate: new Date('2026-10-30'),
+    },
+  });
+
+  // Phase 4.0
+  const phase4 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      wbsCode: '4.0',
+      name: 'Regulatory Certification & Safety Gates',
+      nodeType: 'PHASE',
+      order: 3,
+      progress: 75,
+      plannedCost: 45000000,
+      actualCost: 35000000,
+      ownerId: safetyOfficer.id,
+      startDate: new Date('2026-01-10'),
+      dueDate: new Date('2026-11-30'),
+    },
+  });
+
+  const deliv4_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: phase4.id,
+      wbsCode: '4.1',
+      name: 'Homologation & Functional Safety',
+      nodeType: 'DELIVERABLE',
+      order: 0,
+      progress: 75,
+      plannedCost: 45000000,
+      actualCost: 35000000,
+      ownerId: safetyOfficer.id,
+      startDate: new Date('2026-01-10'),
+      dueDate: new Date('2026-11-30'),
+    },
+  });
+
+  const wbs4_1_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv4_1.id,
+      wbsCode: '4.1.1',
+      name: 'ISO 26262 Functional Safety Technical Safety Concept (TSC)',
+      nodeType: 'WORK_PACKAGE',
+      order: 0,
+      progress: 100,
+      plannedCost: 15000000,
+      actualCost: 12000000,
+      ownerId: safetyOfficer.id,
+      startDate: new Date('2026-01-10'),
+      dueDate: new Date('2026-02-15'),
+    },
+  });
+
+  const wbs4_1_2 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv4_1.id,
+      wbsCode: '4.1.2',
+      name: '◆ Gate 1: Detailed Design Freeze & CAD Virtual Sign-Off',
+      nodeType: 'WORK_PACKAGE',
+      order: 1,
+      progress: 100,
+      plannedCost: 10000000,
+      actualCost: 8000000,
+      ownerId: chiefEngineer.id,
+      startDate: new Date('2026-04-15'),
+      dueDate: new Date('2026-04-15'),
+    },
+  });
+
+  const wbs4_1_3 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: deliv4_1.id,
+      wbsCode: '4.1.3',
+      name: '◆ UNECE R100 & Euro NCAP Homologation Official Sign-Off',
+      nodeType: 'WORK_PACKAGE',
+      order: 2,
+      progress: 30,
+      plannedCost: 20000000,
+      actualCost: 15000000,
+      ownerId: safetyOfficer.id,
+      startDate: new Date('2026-09-30'),
+      dueDate: new Date('2026-09-30'),
+    },
+  });
+
+  // Link all tasks directly to their respective WBS Work Packages
+  await prisma.task.update({ where: { id: task1.id }, data: { wbsNodeId: deliv1_1.id } });
+  await prisma.task.update({ where: { id: task2.id }, data: { wbsNodeId: deliv1_1.id } });
+  await prisma.task.update({ where: { id: task3.id }, data: { wbsNodeId: deliv1_2.id } });
+  await prisma.task.update({ where: { id: task4.id }, data: { wbsNodeId: wbs2_1_1.id } }); // Active Aero
+  await prisma.task.update({ where: { id: task5.id }, data: { wbsNodeId: deliv1_2.id } });
+  await prisma.task.update({ where: { id: task6.id }, data: { wbsNodeId: wbs2_1_2.id } }); // Torque Vectoring
+  await prisma.task.update({ where: { id: task7.id }, data: { wbsNodeId: wbs4_1_1.id } }); // ISO 26262
+  await prisma.task.update({ where: { id: milestoneGate1.id }, data: { wbsNodeId: wbs4_1_2.id } });
+  await prisma.task.update({ where: { id: task8.id }, data: { wbsNodeId: wbs3_1_1.id } }); // Giga Press
+  await prisma.task.update({ where: { id: task9.id }, data: { wbsNodeId: deliv1_1.id } }); // Dyno
+  await prisma.task.update({ where: { id: task10.id }, data: { wbsNodeId: wbs2_2_2.id } }); // Sensor Fusion
+  await prisma.task.update({ where: { id: task11.id }, data: { wbsNodeId: deliv1_2.id } }); // Nail Penetration
+  await prisma.task.update({ where: { id: task12.id }, data: { wbsNodeId: wbs3_1_2.id } }); // Takt Time
+  await prisma.task.update({ where: { id: milestoneTask.id }, data: { wbsNodeId: wbs4_1_3.id } });
+
   // ==========================================
   // PHASE 3: RESOURCE PROFILES & OVERLOAD SEED
   // ==========================================

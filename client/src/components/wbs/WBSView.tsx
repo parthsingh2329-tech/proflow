@@ -192,9 +192,40 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
                   {node.wbsCode}
                 </span>
 
-                <span className={`font-semibold text-xs text-slate-900 dark:text-white ${level === 0 ? 'text-sm font-bold' : ''}`}>
-                  {node.name}
-                </span>
+                <div className="flex-1 truncate">
+                  <span className={`font-semibold text-xs text-slate-900 dark:text-white ${level === 0 ? 'text-sm font-bold' : ''}`}>
+                    {node.name}
+                  </span>
+                  {node.tasks && node.tasks.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      {node.tasks.map((t: any) => (
+                        <span
+                          key={t.id}
+                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-medium"
+                          title={`Kanban Card: ${t.title} | Status: ${t.status}`}
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full shrink-0"
+                            style={{
+                              backgroundColor:
+                                t.status === 'DONE'
+                                  ? '#10b981'
+                                  : t.status === 'IN_PROGRESS'
+                                  ? '#3b82f6'
+                                  : t.status === 'IN_REVIEW'
+                                  ? '#8b5cf6'
+                                  : '#94a3b8',
+                            }}
+                          />
+                          <span className="truncate max-w-[240px]">{t.title}</span>
+                          <span className="font-mono text-[9px] uppercase font-bold text-slate-400">
+                            [{t.status}]
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </td>
 

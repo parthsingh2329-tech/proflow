@@ -421,6 +421,7 @@ export interface WBSNode {
   startDate?: string | null;
   dueDate?: string | null;
   owner?: { id: string; name: string; avatar?: string | null } | null;
+  tasks?: Task[];
   children?: WBSNode[];
 }
 

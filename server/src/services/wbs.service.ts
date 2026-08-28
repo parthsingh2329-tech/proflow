@@ -17,6 +17,7 @@ export interface WBSNodeWithChildren {
   startDate: Date | null;
   dueDate: Date | null;
   owner?: { id: string; name: string; avatar: string | null } | null;
+  tasks?: any[];
   children: WBSNodeWithChildren[];
 }
 
@@ -26,6 +27,18 @@ export const getWBSHierarchy = async (projectId: string): Promise<WBSNodeWithChi
     orderBy: [{ order: 'asc' }, { wbsCode: 'asc' }],
     include: {
       owner: { select: { id: true, name: true, avatar: true } },
+      tasks: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+          startDate: true,
+          isMilestone: true,
+          assignee: { select: { id: true, name: true, avatar: true } },
+        },
+      },
     },
   });
 
