@@ -65,6 +65,24 @@ export const toggleGateCriteria = async (criteriaId: string, isMet: boolean, evi
 };
 
 export const signOffGate = async (gateId: string, userId: string, data: { status: GateStatus; reviewSummary?: string }) => {
+  const gate = await prisma.phaseGate.findUnique({
+    where: { id: gateId },
+    include: { criteria: true },
+  });
+  if (!gate) throw new AppError('Stage gate not found', 404);
+
+  const unmetCriteria = gate.criteria.filter((c) => !c.isMet);
+
+  // If approving but checklist items are pending, enforce explicit executive override justification
+  if (data.status === GateStatus.APPROVED && unmetCriteria.length > 0) {
+    if (!data.reviewSummary || data.reviewSummary.trim().length < 15) {
+      throw new AppError(
+        `APQP Governance Guardrail: Gate cannot be marked Approved while ${unmetCriteria.length} checklist criteria are unmet without an explicit Executive Override Justification (min 15 characters).`,
+        400
+      );
+    }
+  }
+
   return prisma.phaseGate.update({
     where: { id: gateId },
     data: {

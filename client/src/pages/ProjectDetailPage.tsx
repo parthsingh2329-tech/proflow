@@ -245,9 +245,7 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="time">
-          <div className="max-w-md">
-            <TimeTracker tasks={tasks} />
-          </div>
+          <TimeTracker tasks={tasks} projectId={id} />
         </TabsContent>
 
         <TabsContent value="team">

@@ -45,3 +45,12 @@ export const getProjectTimeReport = async (req: Request, res: Response, next: Ne
     next(error);
   }
 };
+
+export const getProjectTimeEntries = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const entries = await timeEntryService.getProjectTimeEntries(req.params.projectId);
+    res.status(200).json(entries);
+  } catch (error) {
+    next(error);
+  }
+};

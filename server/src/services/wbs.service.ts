@@ -78,7 +78,7 @@ export const getWBSHierarchy = async (projectId: string): Promise<WBSNodeWithChi
 };
 
 export const createWBSNode = async (projectId: string, data: any) => {
-  let wbsCode = data.wbsCode;
+  let wbsCode = (data.wbsCode || '').trim();
 
   if (!wbsCode) {
     if (data.parentNodeId) {
@@ -91,6 +91,21 @@ export const createWBSNode = async (projectId: string, data: any) => {
     }
   }
 
+  // Validate WBS Code Uniqueness within the project
+  const existingCode = await prisma.wBSNode.findFirst({
+    where: { projectId, wbsCode },
+  });
+  if (existingCode) {
+    throw new AppError(
+      `WBS code "${wbsCode}" is already assigned to "${existingCode.name}". Please specify a unique WBS code.`,
+      400
+    );
+  }
+
+  const progress = Math.min(100, Math.max(0, Number(data.progress) || 0));
+  const plannedCost = Math.max(0, Number(data.plannedCost) || 0);
+  const actualCost = Math.max(0, Number(data.actualCost) || 0);
+
   return prisma.wBSNode.create({
     data: {
       projectId,
@@ -99,9 +114,9 @@ export const createWBSNode = async (projectId: string, data: any) => {
       name: data.name,
       nodeType: data.nodeType || 'WORK_PACKAGE',
       order: Number(data.order) || 0,
-      progress: Number(data.progress) || 0,
-      plannedCost: Number(data.plannedCost) || 0,
-      actualCost: Number(data.actualCost) || 0,
+      progress,
+      plannedCost,
+      actualCost,
       ownerId: data.ownerId || null,
       startDate: data.startDate ? new Date(data.startDate) : undefined,
       dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
@@ -113,16 +128,32 @@ export const createWBSNode = async (projectId: string, data: any) => {
 };
 
 export const updateWBSNode = async (nodeId: string, data: any) => {
+  const currentNode = await prisma.wBSNode.findUnique({ where: { id: nodeId } });
+  if (!currentNode) throw new AppError('WBS node not found', 404);
+
+  if (data.wbsCode && data.wbsCode.trim() !== currentNode.wbsCode) {
+    const existing = await prisma.wBSNode.findFirst({
+      where: { projectId: currentNode.projectId, wbsCode: data.wbsCode.trim(), id: { not: nodeId } },
+    });
+    if (existing) {
+      throw new AppError(`WBS code "${data.wbsCode.trim()}" is already assigned to "${existing.name}".`, 400);
+    }
+  }
+
+  const progress = data.progress !== undefined ? Math.min(100, Math.max(0, Number(data.progress))) : undefined;
+  const plannedCost = data.plannedCost !== undefined ? Math.max(0, Number(data.plannedCost)) : undefined;
+  const actualCost = data.actualCost !== undefined ? Math.max(0, Number(data.actualCost)) : undefined;
+
   return prisma.wBSNode.update({
     where: { id: nodeId },
     data: {
       name: data.name,
-      wbsCode: data.wbsCode,
+      wbsCode: data.wbsCode ? data.wbsCode.trim() : undefined,
       nodeType: data.nodeType,
       order: data.order !== undefined ? Number(data.order) : undefined,
-      progress: data.progress !== undefined ? Number(data.progress) : undefined,
-      plannedCost: data.plannedCost !== undefined ? Number(data.plannedCost) : undefined,
-      actualCost: data.actualCost !== undefined ? Number(data.actualCost) : undefined,
+      progress,
+      plannedCost,
+      actualCost,
       ownerId: data.ownerId,
       startDate: data.startDate !== undefined ? (data.startDate ? new Date(data.startDate) : null) : undefined,
       dueDate: data.dueDate !== undefined ? (data.dueDate ? new Date(data.dueDate) : null) : undefined,

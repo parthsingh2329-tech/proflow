@@ -316,8 +316,21 @@ export default function StageGateView({ projectId, members }: StageGateViewProps
           <div className="relative z-50 w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 space-y-4">
             <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center">
               <Award className="h-5 w-5 text-indigo-600 mr-2" />
-              Executive Stage-Gate Sign-Off: {signingOffGate.gateCode}
+              Executive Stage-Gate Sign-Off: {signingOffGate.gateCode} - {signingOffGate.name}
             </h3>
+
+            {/* APQP Guardrail Warning */}
+            {signingOffGate.criteria.filter((c) => !c.isMet).length > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300 space-y-1">
+                <div className="flex items-center font-bold">
+                  <AlertCircle className="h-4 w-4 text-amber-600 mr-1.5 shrink-0" />
+                  <span>APQP Compliance Alert: {signingOffGate.criteria.filter((c) => !c.isMet).length} Criteria Pending</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Gate cannot be approved without completing all criteria or providing an explicit <strong>Executive Override Justification</strong> in the review summary.
+                </p>
+              </div>
+            )}
 
             <form onSubmit={handleSaveSignOff} className="space-y-4">
               <div className="space-y-1">
@@ -334,14 +347,24 @@ export default function StageGateView({ projectId, members }: StageGateViewProps
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Steering Board Review Summary & Conditions
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Steering Board Review Summary {signOffStatus === 'APPROVED' && signingOffGate.criteria.filter((c) => !c.isMet).length > 0 ? '* (Required Override Justification)' : ''}
+                  </label>
+                  {signOffStatus === 'APPROVED' && signingOffGate.criteria.filter((c) => !c.isMet).length > 0 && (
+                    <span className="text-[10px] text-amber-600 font-mono">Min 15 chars</span>
+                  )}
+                </div>
                 <Textarea
                   value={reviewSummary}
                   onChange={(e) => setReviewSummary(e.target.value)}
-                  placeholder="e.g. Steering Committee approved 800V SiC prototype release with condition that thermal sensor bench is calibrated by next milestone..."
+                  placeholder={
+                    signOffStatus === 'APPROVED' && signingOffGate.criteria.filter((c) => !c.isMet).length > 0
+                      ? 'State explicit Executive Override reason (e.g. Steering Committee approves Gate Pass based on completed mule track testing while Giga-press supplier tooling certification is expedited under ECO-0104)...'
+                      : 'e.g. Steering Committee approved 800V SiC prototype release with condition that thermal sensor bench is calibrated by next milestone...'
+                  }
                   rows={4}
+                  required={signOffStatus === 'APPROVED' && signingOffGate.criteria.filter((c) => !c.isMet).length > 0}
                   className="text-xs"
                 />
               </div>
@@ -350,8 +373,17 @@ export default function StageGateView({ projectId, members }: StageGateViewProps
                 <Button type="button" variant="outline" size="sm" onClick={() => setIsSignOffModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" size="sm">
-                  Record Formal Sign-Off
+                <Button 
+                  type="submit" 
+                  size="sm"
+                  disabled={
+                    signOffGateMutation.isPending ||
+                    (signOffStatus === 'APPROVED' &&
+                      signingOffGate.criteria.filter((c) => !c.isMet).length > 0 &&
+                      reviewSummary.trim().length < 15)
+                  }
+                >
+                  {signOffGateMutation.isPending ? 'Signing Off...' : 'Record Formal Sign-Off'}
                 </Button>
               </div>
             </form>

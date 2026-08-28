@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import toast from 'react-hot-toast';
 import { formatCurrency } from '@/components/financials/EVMPerformanceDashboard';
 
 interface ChangeManagementViewProps {
@@ -58,16 +59,39 @@ export default function ChangeManagementView({ projectId, members }: ChangeManag
   const [scheduleImpactDays, setScheduleImpactDays] = useState<number>(0);
   const [riskImpact, setRiskImpact] = useState('');
 
+  const openCreateDialog = () => {
+    setTitle('');
+    setEcoCode(`ECO-${String(101 + changes.length).padStart(4, '0')}`);
+    setDescription('');
+    setReason('');
+    setCostImpact(0);
+    setScheduleImpactDays(0);
+    setRiskImpact('');
+    setIsCreateOpen(true);
+  };
+
   const handleCreateECO = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) return;
+    if (!title.trim() || !description.trim()) {
+      toast.error('Title and description are required');
+      return;
+    }
+
+    const trimmedEco = (ecoCode || '').trim().toUpperCase();
+    if (trimmedEco) {
+      const conflict = changes.find((c) => c.ecoCode.toUpperCase() === trimmedEco);
+      if (conflict) {
+        toast.error(`Change Order number "${trimmedEco}" is already assigned to "${conflict.title}". Please specify a unique ECO identifier.`);
+        return;
+      }
+    }
 
     createChangeMutation.mutate(
       {
-        title,
-        ecoCode: ecoCode || undefined,
-        description,
-        reason,
+        title: title.trim(),
+        ecoCode: trimmedEco || undefined,
+        description: description.trim(),
+        reason: reason.trim(),
         costImpact: Number(costImpact) || 0,
         scheduleImpactDays: Number(scheduleImpactDays) || 0,
         riskImpact: riskImpact || undefined,
@@ -75,13 +99,10 @@ export default function ChangeManagementView({ projectId, members }: ChangeManag
       {
         onSuccess: () => {
           setIsCreateOpen(false);
-          setTitle('');
-          setEcoCode('');
-          setDescription('');
-          setReason('');
-          setCostImpact(0);
-          setScheduleImpactDays(0);
-          setRiskImpact('');
+          toast.success('Change order submitted to CCB');
+        },
+        onError: (err: any) => {
+          toast.error(err.response?.data?.message || 'Failed to submit change order');
         },
       }
     );
@@ -105,7 +126,7 @@ export default function ChangeManagementView({ projectId, members }: ChangeManag
           </p>
         </div>
 
-        <Button onClick={() => setIsCreateOpen(true)} className="h-9 text-xs font-semibold shadow-sm">
+        <Button onClick={openCreateDialog} className="h-9 text-xs font-semibold shadow-sm">
           <Plus className="h-4 w-4 mr-1.5" /> Submit Change Order (ECO)
         </Button>
       </div>

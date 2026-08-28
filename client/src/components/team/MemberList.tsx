@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { UserPlus, Trash2, Shield } from 'lucide-react';
+import React, { useState } from 'react';
+import { UserPlus, Trash2, Shield, UserCog } from 'lucide-react';
 import { ProjectMember } from '@/types';
-import { useRemoveProjectMember } from '@/hooks/useProjects';
+import { useRemoveProjectMember, useUpdateMemberRole } from '@/hooks/useProjects';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import InviteMemberDialog from './InviteMemberDialog';
 
@@ -15,9 +16,14 @@ interface MemberListProps {
 export default function MemberList({ projectId, members = [] }: MemberListProps) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const removeMember = useRemoveProjectMember();
+  const updateMemberRole = useUpdateMemberRole();
+
+  const handleRoleChange = (memberId: string, newRole: string) => {
+    updateMemberRole.mutate({ projectId, memberId, role: newRole });
+  };
 
   const handleRemove = (memberId: string, name: string) => {
-    if (window.confirm(`Remove ${name} from this project?`)) {
+    if (window.confirm(`Are you sure you want to remove ${name} from this project?`)) {
       removeMember.mutate({ projectId, memberId });
     }
   };
@@ -30,7 +36,7 @@ export default function MemberList({ projectId, members = [] }: MemberListProps)
             Team Members ({members.length})
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            People with access to this project
+            Collaborators with assigned roles and permissions
           </p>
         </div>
         <Button onClick={() => setInviteOpen(true)} size="sm" className="space-x-1.5 text-xs">
@@ -41,7 +47,7 @@ export default function MemberList({ projectId, members = [] }: MemberListProps)
 
       <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
         {members.map((member) => (
-          <div key={member.id} className="flex items-center justify-between p-4">
+          <div key={member.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 gap-3">
             <div className="flex items-center space-x-3">
               <Avatar className="h-9 w-9">
                 <AvatarImage src={member.user?.avatar} />
@@ -51,23 +57,29 @@ export default function MemberList({ projectId, members = [] }: MemberListProps)
                 <h4 className="text-sm font-medium text-slate-900 dark:text-white">
                   {member.user?.name}
                 </h4>
-                <p className="text-xs text-slate-400">{member.user?.email}</p>
+                <p className="text-xs text-slate-400 font-mono">{member.user?.email}</p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
-              <Badge variant={member.role === 'ADMIN' ? 'default' : 'secondary'} className="text-xs">
-                <Shield className="h-3 w-3 mr-1" />
-                {member.role}
-              </Badge>
+            <div className="flex items-center space-x-3 self-end sm:self-auto">
+              <Select
+                value={member.role}
+                onChange={(e) => handleRoleChange(member.id, e.target.value)}
+                className="text-xs h-8 w-32 font-semibold"
+              >
+                <option value="ADMIN">ADMIN</option>
+                <option value="MANAGER">MANAGER</option>
+                <option value="MEMBER">MEMBER</option>
+                <option value="VIEWER">VIEWER</option>
+              </Select>
 
               {member.role !== 'ADMIN' && (
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => handleRemove(member.id, member.user?.name || 'user')}
-                  className="h-8 w-8 text-slate-400 hover:text-rose-600"
-                  title="Remove member"
+                  className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950"
+                  title="Remove from project"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

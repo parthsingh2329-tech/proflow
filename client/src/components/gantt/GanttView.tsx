@@ -95,8 +95,8 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
 
   const totalTimelineDays = timelineDays.length;
 
-  const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
-  const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const nextMonth = () => setCurrentMonth((prev) => addMonths(prev, 1));
+  const prevMonth = () => setCurrentMonth((prev) => subMonths(prev, 1));
 
   const toggleNodeCollapse = (nodeId: string) => {
     setCollapsedNodes((prev) => {

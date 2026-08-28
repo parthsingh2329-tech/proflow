@@ -96,6 +96,23 @@ export const useAddProjectMember = () => {
   });
 };
 
+export const useUpdateMemberRole = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, memberId, role }: { projectId: string; memberId: string; role: string }) => {
+      const res = await api.patch(`/projects/${projectId}/members/${memberId}`, { role });
+      return res.data;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['projects', vars.projectId] });
+      toast.success('Member role updated');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to update member role');
+    },
+  });
+};
+
 export const useRemoveProjectMember = () => {
   const queryClient = useQueryClient();
   return useMutation({

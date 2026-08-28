@@ -12,5 +12,6 @@ router.post('/task/:taskId', validate(createTimeEntrySchema), timeEntryControlle
 router.put('/:entryId', validate(createTimeEntrySchema.partial()), timeEntryController.updateTimeEntry);
 router.delete('/:entryId', timeEntryController.deleteTimeEntry);
 router.get('/project/:projectId', timeEntryController.getProjectTimeReport);
+router.get('/project/:projectId/list', timeEntryController.getProjectTimeEntries);
 
 export default router;

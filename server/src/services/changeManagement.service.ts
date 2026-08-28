@@ -14,10 +14,21 @@ export const getChangeRequests = async (projectId: string) => {
 };
 
 export const createChangeRequest = async (projectId: string, userId: string, data: any) => {
-  let ecoCode = data.ecoCode;
+  let ecoCode = data.ecoCode ? data.ecoCode.trim().toUpperCase() : '';
   if (!ecoCode) {
     const count = await prisma.changeRequest.count({ where: { projectId } });
     ecoCode = `ECO-${String(100 + count + 1).padStart(4, '0')}`;
+  }
+
+  // Validate ECO Number Uniqueness
+  const existing = await prisma.changeRequest.findFirst({
+    where: { projectId, ecoCode },
+  });
+  if (existing) {
+    throw new AppError(
+      `Change Order number "${ecoCode}" is already assigned to "${existing.title}". Please choose a unique ECO identifier.`,
+      400
+    );
   }
 
   return prisma.changeRequest.create({

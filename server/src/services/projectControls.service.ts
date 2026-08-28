@@ -81,6 +81,16 @@ export const getProjectIssues = async (projectId: string) => {
 };
 
 export const createIssue = async (projectId: string, data: any) => {
+  if (
+    (data.status === 'RESOLVED' || data.status === 'CLOSED') &&
+    (!data.rootCause || data.rootCause.trim().length < 5 || !data.correctiveAction || data.correctiveAction.trim().length < 5)
+  ) {
+    throw new AppError(
+      'CAPA Guardrail: Issues cannot be saved as Resolved without documenting Root Cause Analysis and Corrective Action Plan (CAPA).',
+      400
+    );
+  }
+
   const count = await prisma.issue.count({ where: { projectId } });
   const issueCode = data.issueCode || `ISS-${String(count + 1).padStart(3, '0')}`;
 
@@ -98,6 +108,19 @@ export const createIssue = async (projectId: string, data: any) => {
 };
 
 export const updateIssue = async (issueId: string, data: any) => {
+  if (data.status === 'RESOLVED' || data.status === 'CLOSED') {
+    const current = await prisma.issue.findUnique({ where: { id: issueId } });
+    const finalRoot = data.rootCause !== undefined ? data.rootCause : current?.rootCause;
+    const finalCapa = data.correctiveAction !== undefined ? data.correctiveAction : current?.correctiveAction;
+
+    if (!finalRoot || finalRoot.trim().length < 5 || !finalCapa || finalCapa.trim().length < 5) {
+      throw new AppError(
+        'CAPA Guardrail: Cannot resolve issue without documenting Root Cause and Corrective Action Plan (CAPA).',
+        400
+      );
+    }
+  }
+
   return prisma.issue.update({
     where: { id: issueId },
     data: {
@@ -183,6 +206,19 @@ export const getProjectBaselines = async (projectId: string) => {
 };
 
 export const freezeProjectBaseline = async (projectId: string, name: string, description: string | undefined, userId: string) => {
+  const trimmedName = (name || '').trim() || `Baseline T${Date.now().toString().slice(-4)}`;
+
+  // Validate Baseline Name Uniqueness
+  const existing = await prisma.projectBaseline.findFirst({
+    where: { projectId, name: trimmedName },
+  });
+  if (existing) {
+    throw new AppError(
+      `A baseline named "${trimmedName}" already exists for this project. Please provide a distinct baseline identifier (e.g. T1, T2).`,
+      400
+    );
+  }
+
   return prisma.$transaction(async (tx) => {
     // 1. Fetch current tasks for the project
     const currentTasks = await tx.task.findMany({
@@ -193,7 +229,7 @@ export const freezeProjectBaseline = async (projectId: string, name: string, des
     const baseline = await tx.projectBaseline.create({
       data: {
         projectId,
-        name: name || `Baseline T${Date.now().toString().slice(-4)}`,
+        name: trimmedName,
         description,
         createdById: userId,
       },

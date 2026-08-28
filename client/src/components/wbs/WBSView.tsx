@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatCurrency } from '@/components/financials/EVMPerformanceDashboard';
+import toast from 'react-hot-toast';
 
 interface WBSViewProps {
   projectId: string;
@@ -136,18 +137,49 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
     setIsCreateOpen(true);
   };
 
+  const getAllNodes = (nodes: WBSNode[]): WBSNode[] => {
+    const res: WBSNode[] = [];
+    const trav = (list: WBSNode[]) => {
+      list.forEach((n) => {
+        res.push(n);
+        if (n.children) trav(n.children);
+      });
+    };
+    trav(nodes);
+    return res;
+  };
+
   const handleSaveNode = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim()) {
+      toast.error('Node name is required');
+      return;
+    }
+
+    const trimmedCode = wbsCode.trim();
+    if (trimmedCode) {
+      const allExisting = getAllNodes(wbsTree);
+      const conflict = allExisting.find(
+        (n) => n.wbsCode.toLowerCase() === trimmedCode.toLowerCase() && (!editingNode || n.id !== editingNode.id)
+      );
+      if (conflict) {
+        toast.error(`WBS code "${trimmedCode}" is already assigned to "${conflict.name}". Please choose a unique code.`);
+        return;
+      }
+    }
+
+    const clampedProgress = Math.min(100, Math.max(0, Number(progress) || 0));
+    const clampedPlanned = Math.max(0, Number(plannedCost) || 0);
+    const clampedActual = Math.max(0, Number(actualCost) || 0);
 
     const payload = {
-      name,
-      wbsCode: wbsCode || undefined,
+      name: name.trim(),
+      wbsCode: trimmedCode || undefined,
       nodeType,
       parentNodeId: selectedParentNode?.id || (editingNode ? editingNode.parentNodeId : undefined),
-      progress: Number(progress) || 0,
-      plannedCost: Number(plannedCost) || 0,
-      actualCost: Number(actualCost) || 0,
+      progress: clampedProgress,
+      plannedCost: clampedPlanned,
+      actualCost: clampedActual,
       ownerId: ownerId || undefined,
       startDate: startDate || undefined,
       dueDate: dueDate || undefined,
@@ -155,11 +187,23 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
 
     if (editingNode) {
       updateNodeMutation.mutate({ nodeId: editingNode.id, data: payload }, {
-        onSuccess: () => setIsCreateOpen(false),
+        onSuccess: () => {
+          setIsCreateOpen(false);
+          toast.success('WBS Node updated');
+        },
+        onError: (err: any) => {
+          toast.error(err.response?.data?.message || 'Failed to update WBS node');
+        },
       });
     } else {
       createNodeMutation.mutate(payload, {
-        onSuccess: () => setIsCreateOpen(false),
+        onSuccess: () => {
+          setIsCreateOpen(false);
+          toast.success('WBS Node added to hierarchy');
+        },
+        onError: (err: any) => {
+          toast.error(err.response?.data?.message || 'Failed to create WBS node');
+        },
       });
     }
   };

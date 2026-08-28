@@ -40,8 +40,8 @@ export default function CalendarView({ tasks = [], onTaskClick }: CalendarViewPr
 
   const days = eachDayOfInterval({ start: startDate, end: endDate });
 
-  const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
-  const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const nextMonth = () => setCurrentMonth((prev) => addMonths(prev, 1));
+  const prevMonth = () => setCurrentMonth((prev) => subMonths(prev, 1));
   const today = () => setCurrentMonth(new Date());
 
   return (

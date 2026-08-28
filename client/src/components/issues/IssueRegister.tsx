@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import toast from 'react-hot-toast';
 
 interface IssueRegisterProps {
   projectId: string;
@@ -87,27 +88,56 @@ export default function IssueRegister({ projectId, members }: IssueRegisterProps
 
   const handleSaveIssue = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      toast.error('Issue title is required');
+      return;
+    }
+
+    if (status === 'RESOLVED') {
+      if (!rootCause || rootCause.trim().length < 5) {
+        toast.error('CAPA Guardrail: An issue cannot be marked Resolved without documenting Root Cause Analysis (min 5 chars).');
+        return;
+      }
+      if (!correctiveAction || correctiveAction.trim().length < 5) {
+        toast.error('CAPA Guardrail: An issue cannot be marked Resolved without documenting Corrective/Preventive Action Plan (CAPA).');
+        return;
+      }
+    }
 
     const payload = {
-      title,
-      description,
+      title: title.trim(),
+      description: description.trim(),
       severity,
       status,
-      rootCause,
-      correctiveAction,
-      escalatedTo,
+      rootCause: rootCause.trim(),
+      correctiveAction: correctiveAction.trim(),
+      escalatedTo: escalatedTo.trim(),
       ownerId: ownerId || undefined,
       dueDate: dueDate || undefined,
     };
 
     if (editingIssue) {
-      updateIssueMutation.mutate({ issueId: editingIssue.id, data: payload }, {
-        onSuccess: () => setIsCreateOpen(false)
-      });
+      updateIssueMutation.mutate(
+        { issueId: editingIssue.id, data: payload },
+        {
+          onSuccess: () => {
+            setIsCreateOpen(false);
+            toast.success('Issue updated');
+          },
+          onError: (err: any) => {
+            toast.error(err.response?.data?.message || 'Failed to update issue');
+          },
+        }
+      );
     } else {
       createIssueMutation.mutate(payload, {
-        onSuccess: () => setIsCreateOpen(false)
+        onSuccess: () => {
+          setIsCreateOpen(false);
+          toast.success('Issue logged in register');
+        },
+        onError: (err: any) => {
+          toast.error(err.response?.data?.message || 'Failed to create issue');
+        },
       });
     }
   };

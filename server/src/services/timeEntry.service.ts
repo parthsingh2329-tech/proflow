@@ -67,3 +67,14 @@ export const getProjectTimeReport = async (projectId: string) => {
 
   return { byUser: Object.values(byUser), byTask: Object.values(byTask) };
 };
+
+export const getProjectTimeEntries = async (projectId: string) => {
+  return prisma.timeEntry.findMany({
+    where: { task: { projectId } },
+    include: {
+      user: { select: { id: true, name: true, avatar: true, email: true } },
+      task: { select: { id: true, title: true, priority: true, status: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+};

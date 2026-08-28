@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import toast from 'react-hot-toast';
 
 interface BaselineManagerProps {
   projectId: string;
@@ -41,14 +42,28 @@ export default function BaselineManager({ projectId }: BaselineManagerProps) {
 
   const handleFreeze = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      toast.error('Baseline name is required');
+      return;
+    }
 
-    freezeBaselineMutation.mutate({ name, description }, {
+    const conflict = baselines.find((b) => b.name.toLowerCase() === trimmedName.toLowerCase());
+    if (conflict) {
+      toast.error(`A baseline named "${trimmedName}" already exists. Please choose a distinct version identifier (e.g. T1, T2).`);
+      return;
+    }
+
+    freezeBaselineMutation.mutate({ name: trimmedName, description: description.trim() }, {
       onSuccess: () => {
         setName('');
         setDescription('');
         setIsFreezeOpen(false);
-      }
+        toast.success(`Schedule baseline "${trimmedName}" frozen`);
+      },
+      onError: (err: any) => {
+        toast.error(err.response?.data?.message || 'Failed to freeze baseline');
+      },
     });
   };
 
@@ -153,11 +168,8 @@ export default function BaselineManager({ projectId }: BaselineManagerProps) {
                       const liveTask = (currentTasks as Task[]).find((t: Task) => t.id === tb.taskId);
                       const baseDue = tb.dueDate ? new Date(tb.dueDate) : null;
                       const liveDue = liveTask?.dueDate ? new Date(liveTask.dueDate) : null;
-
-                      let slippageDays = 0;
-                      if (baseDue && liveDue) {
-                        slippageDays = differenceInDays(liveDue, baseDue);
-                      }
+                      const hasBothDates = !!baseDue && !!liveDue;
+                      const slippageDays = hasBothDates ? differenceInDays(liveDue, baseDue) : null;
 
                       return (
                         <tr
@@ -177,14 +189,18 @@ export default function BaselineManager({ projectId }: BaselineManagerProps) {
                           </td>
 
                           <td className="p-3 text-center whitespace-nowrap">
-                            {slippageDays === 0 ? (
+                            {!hasBothDates ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                No baseline set
+                              </span>
+                            ) : slippageDays === 0 ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                                 <CheckCircle2 className="h-3 w-3 mr-1" /> On Baseline (0d)
                               </span>
-                            ) : slippageDays > 0 ? (
+                            ) : slippageDays! > 0 ? (
                               <span
                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  slippageDays > 5
+                                  slippageDays! > 5
                                     ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
                                     : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                                 }`}
