@@ -201,7 +201,7 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="gantt">
-          <GanttView tasks={tasks} onTaskClick={setSelectedTask} />
+          <GanttView tasks={tasks} projectId={id} onTaskClick={setSelectedTask} />
         </TabsContent>
 
         <TabsContent value="wbs">

@@ -78,6 +78,7 @@ export interface Task {
   reporterId: string;
   parentTaskId?: string;
   milestoneId?: string;
+  wbsNodeId?: string;
   isMilestone?: boolean;
   createdAt: string;
   assignee?: User;
