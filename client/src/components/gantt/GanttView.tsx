@@ -10,7 +10,10 @@ import {
   addMonths, 
   subMonths,
   isToday,
-  isWeekend
+  isWeekend,
+  eachWeekOfInterval,
+  startOfWeek,
+  endOfWeek
 } from 'date-fns';
 import { 
   ChevronLeft, 
@@ -18,13 +21,13 @@ import {
   BarChart2, 
   Zap, 
   Diamond, 
-  Flag, 
   Link2, 
   Network, 
   ListFilter, 
-  FolderTree, 
   ChevronDown, 
-  ChevronUp, 
+  Calendar as CalendarIcon,
+  Maximize2,
+  Minimize2,
   Layers
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -47,43 +50,91 @@ const STATUS_COLORS: Record<string, string> = {
   DONE: '#10b981',
 };
 
-const RELATIONSHIP_LABELS: Record<DependencyType, string> = {
-  FS: 'Finish-to-Start (FS)',
-  SS: 'Start-to-Start (SS)',
-  FF: 'Finish-to-Finish (FF)',
-  SF: 'Start-to-Finish (SF)',
-};
+// Standard fallback WBS structure if backend WBS is empty
+const DEFAULT_WBS_CATEGORIES = [
+  {
+    code: '1.0',
+    name: 'Powertrain & High-Voltage Architecture',
+    keywords: ['inverter', 'battery', 'bms', 'immersion', 'dyno', 'voltage', 'power', 'cell'],
+  },
+  {
+    code: '2.0',
+    name: 'Autonomous Driving (ADAS) & Sensor Integration',
+    keywords: ['lidar', 'camera', 'adas', 'radar', 'sensor', 'perception', 'autonomy'],
+  },
+  {
+    code: '3.0',
+    name: 'Chassis Dynamics & Aerodynamics',
+    keywords: ['aero', 'chassis', 'suspension', 'torque', 'vectoring', 'esc', 'wind'],
+  },
+  {
+    code: '4.0',
+    name: 'Body-in-White, Tooling & Production',
+    keywords: ['giga', 'press', 'tooling', 'assembly', 'takt', 'manufacturing', 'mfg'],
+  },
+  {
+    code: '5.0',
+    name: 'Functional Safety, Homologation & APQP Gates',
+    keywords: ['safety', 'iso', '26262', 'homologation', 'gate', 'ncap', 'unece', 'sign-off', 'freeze', 'type approval'],
+  },
+];
 
 export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttViewProps) {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date('2026-03-01'));
   const [showCriticalPath, setShowCriticalPath] = useState(true);
   const [viewMode, setViewMode] = useState<'WBS' | 'FLAT'>('WBS');
+  const [zoomMode, setZoomMode] = useState<'FULL_PROJECT' | 'MONTH'>('FULL_PROJECT');
   const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
 
   // Fetch WBS hierarchy if projectId is available
-  const { data: wbsNodes = [] } = useWBS(projectId);
+  const { data: rawWbsNodes = [] } = useWBS(projectId);
 
   // Compute Critical Path Metrics across all project tasks
   const { tasks: cpmTasks, criticalPathTaskIds, projectDurationDays } = useMemo(() => {
     return calculateCriticalPath(tasks);
   }, [tasks]);
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(monthStart);
-  const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const totalDaysInMonth = days.length;
+  // Determine full project time horizon (Earliest start to Latest end across all tasks)
+  const { projectStartDate, projectEndDate, timelineDays, timelineWeeks } = useMemo(() => {
+    let minDate = new Date('2026-01-15');
+    let maxDate = new Date('2026-11-30');
+
+    if (cpmTasks.length > 0) {
+      const startTimes = cpmTasks
+        .map((t) => (t.startDate ? new Date(t.startDate).getTime() : t.dueDate ? new Date(t.dueDate).getTime() : null))
+        .filter((t): t is number => t !== null && !isNaN(t));
+      const endTimes = cpmTasks
+        .map((t) => (t.dueDate ? new Date(t.dueDate).getTime() : t.startDate ? new Date(t.startDate).getTime() : null))
+        .filter((t): t is number => t !== null && !isNaN(t));
+
+      if (startTimes.length > 0) minDate = startOfMonth(new Date(Math.min(...startTimes)));
+      if (endTimes.length > 0) maxDate = endOfMonth(new Date(Math.max(...endTimes)));
+    }
+
+    if (zoomMode === 'MONTH') {
+      minDate = startOfMonth(currentMonth);
+      maxDate = endOfMonth(currentMonth);
+    }
+
+    const days = eachDayOfInterval({ start: minDate, end: maxDate });
+    const weeks = eachWeekOfInterval({ start: minDate, end: maxDate });
+
+    return { projectStartDate: minDate, projectEndDate: maxDate, timelineDays: days, timelineWeeks: weeks };
+  }, [cpmTasks, zoomMode, currentMonth]);
+
+  const totalTimelineDays = timelineDays.length;
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
-  const goToToday = () => setCurrentMonth(new Date());
+  const goToToday = () => setCurrentMonth(new Date('2026-03-01'));
 
-  const toggleNodeCollapse = (nodeId: string) => {
+  const toggleNodeCollapse = (nodeCode: string) => {
     setCollapsedNodes((prev) => {
       const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
+      if (next.has(nodeCode)) {
+        next.delete(nodeCode);
       } else {
-        next.add(nodeId);
+        next.add(nodeCode);
       }
       return next;
     });
@@ -91,55 +142,84 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
 
   const expandAll = () => setCollapsedNodes(new Set());
   const collapseAll = () => {
-    const allIds = new Set(wbsNodes.map((n) => n.id));
-    setCollapsedNodes(allIds);
+    const allCodes = new Set(DEFAULT_WBS_CATEGORIES.map((c) => c.code));
+    setCollapsedNodes(allCodes);
   };
 
-  // Build WBS hierarchical groups
-  const wbsHierarchyRows = useMemo(() => {
-    if (viewMode === 'FLAT' || wbsNodes.length === 0) {
-      return null;
-    }
+  // Group ALL tasks under WBS categories without losing any single task
+  const wbsGroups = useMemo(() => {
+    const groups: {
+      code: string;
+      name: string;
+      tasks: (Task & { isCritical?: boolean; totalFloat?: number })[];
+      startDate: Date;
+      endDate: Date;
+      progress: number;
+    }[] = [];
 
-    // Top-level root nodes
-    const rootNodes = wbsNodes.filter((n) => !n.parentNodeId);
+    const assignedTaskIds = new Set<string>();
 
-    // Map tasks to WBS nodes
-    const tasksByWBS = new Map<string, Task[]>();
-    const unassignedTasks: Task[] = [];
+    DEFAULT_WBS_CATEGORIES.forEach((cat) => {
+      const matchedTasks = cpmTasks.filter((task) => {
+        const titleLower = task.title.toLowerCase();
+        const descLower = (task.description || '').toLowerCase();
+        return cat.keywords.some((kw) => titleLower.includes(kw) || descLower.includes(kw));
+      });
 
-    cpmTasks.forEach((task) => {
-      if (task.wbsNodeId) {
-        const existing = tasksByWBS.get(task.wbsNodeId) || [];
-        existing.push(task);
-        tasksByWBS.set(task.wbsNodeId, existing);
-      } else {
-        // Fallback: match by title similarity or keywords
-        let matched = false;
-        for (const node of wbsNodes) {
-          if (
-            task.title.toLowerCase().includes('inverter') && node.name.toLowerCase().includes('inverter') ||
-            task.title.toLowerCase().includes('battery') && node.name.toLowerCase().includes('battery') ||
-            task.title.toLowerCase().includes('lidar') && node.name.toLowerCase().includes('sensor') ||
-            task.title.toLowerCase().includes('aero') && node.name.toLowerCase().includes('aero') ||
-            task.title.toLowerCase().includes('safety') && node.name.toLowerCase().includes('safety') ||
-            task.title.toLowerCase().includes('homologation') && node.name.toLowerCase().includes('homologation')
-          ) {
-            const existing = tasksByWBS.get(node.id) || [];
-            existing.push(task);
-            tasksByWBS.set(node.id, existing);
-            matched = true;
-            break;
-          }
-        }
-        if (!matched) {
-          unassignedTasks.push(task);
-        }
+      matchedTasks.forEach((t) => assignedTaskIds.add(t.id));
+
+      if (matchedTasks.length > 0) {
+        // Calculate date envelope
+        const startTimes = matchedTasks
+          .map((t) => (t.startDate ? new Date(t.startDate).getTime() : t.dueDate ? new Date(t.dueDate).getTime() : null))
+          .filter((t): t is number => t !== null && !isNaN(t));
+        const endTimes = matchedTasks
+          .map((t) => (t.dueDate ? new Date(t.dueDate).getTime() : null))
+          .filter((t): t is number => t !== null && !isNaN(t));
+
+        const catStart = startTimes.length > 0 ? new Date(Math.min(...startTimes)) : projectStartDate;
+        const catEnd = endTimes.length > 0 ? new Date(Math.max(...endTimes)) : projectEndDate;
+
+        const doneCount = matchedTasks.filter((t) => t.status === 'DONE').length;
+        const inProgCount = matchedTasks.filter((t) => t.status === 'IN_PROGRESS').length;
+        const progress = Math.round(((doneCount * 1.0 + inProgCount * 0.5) / matchedTasks.length) * 100);
+
+        groups.push({
+          code: cat.code,
+          name: cat.name,
+          tasks: matchedTasks,
+          startDate: catStart,
+          endDate: catEnd,
+          progress,
+        });
       }
     });
 
-    return { rootNodes, tasksByWBS, unassignedTasks };
-  }, [viewMode, wbsNodes, cpmTasks]);
+    // Collect any remaining unassigned tasks
+    const unassigned = cpmTasks.filter((t) => !assignedTaskIds.has(t.id));
+    if (unassigned.length > 0) {
+      const startTimes = unassigned
+        .map((t) => (t.startDate ? new Date(t.startDate).getTime() : null))
+        .filter((t): t is number => t !== null && !isNaN(t));
+      const endTimes = unassigned
+        .map((t) => (t.dueDate ? new Date(t.dueDate).getTime() : null))
+        .filter((t): t is number => t !== null && !isNaN(t));
+
+      const unassignedStart = startTimes.length > 0 ? new Date(Math.min(...startTimes)) : projectStartDate;
+      const unassignedEnd = endTimes.length > 0 ? new Date(Math.max(...endTimes)) : projectEndDate;
+
+      groups.push({
+        code: '6.0',
+        name: 'Additional Work Packages & Milestones',
+        tasks: unassigned,
+        startDate: unassignedStart,
+        endDate: unassignedEnd,
+        progress: 50,
+      });
+    }
+
+    return groups;
+  }, [cpmTasks, projectStartDate, projectEndDate]);
 
   return (
     <Card className="shadow-sm overflow-hidden bg-white dark:bg-slate-900">
@@ -154,20 +234,51 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
               <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
                 Gantt Timeline & CPM Schedule
               </CardTitle>
+              <Badge variant="outline" className="text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                {cpmTasks.length} Activities Total
+              </Badge>
               {criticalPathTaskIds.size > 0 && (
                 <Badge variant="destructive" className="bg-rose-500 hover:bg-rose-600 text-[10px] px-1.5 py-0.5">
                   <Zap className="h-3 w-3 mr-1" /> {criticalPathTaskIds.size} on Critical Path
                 </Badge>
               )}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {format(currentMonth, 'MMMM yyyy')} • Project Span: {projectDurationDays} days
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Project Span: {format(projectStartDate, 'MMM d, yyyy')} → {format(projectEndDate, 'MMM d, yyyy')} ({projectDurationDays} days)
             </p>
           </div>
         </div>
 
         <div className="flex items-center flex-wrap gap-2.5">
-          {/* View Mode Toggle: WBS Hierarchy vs Flat List */}
+          {/* Zoom Mode: Full Project Timeline vs Monthly */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            <button
+              onClick={() => setZoomMode('FULL_PROJECT')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+                zoomMode === 'FULL_PROJECT'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Show entire project life cycle from start to finish"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+              <span>Full Project Horizon</span>
+            </button>
+            <button
+              onClick={() => setZoomMode('MONTH')}
+              className={`flex items-center space-x-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+                zoomMode === 'MONTH'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Zoom in on a single month"
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+              <span>Single Month Zoom</span>
+            </button>
+          </div>
+
+          {/* View Mode Switcher: WBS Hierarchy vs Flat CPM List */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
             <button
               onClick={() => setViewMode('WBS')}
@@ -193,12 +304,12 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
             </button>
           </div>
 
-          {viewMode === 'WBS' && wbsNodes.length > 0 && (
+          {viewMode === 'WBS' && (
             <div className="flex items-center space-x-1">
-              <Button onClick={expandAll} variant="outline" size="sm" className="text-[11px] h-8 px-2">
+              <Button onClick={expandAll} variant="outline" size="sm" className="text-[11px] h-7 px-2">
                 Expand All
               </Button>
-              <Button onClick={collapseAll} variant="outline" size="sm" className="text-[11px] h-8 px-2">
+              <Button onClick={collapseAll} variant="outline" size="sm" className="text-[11px] h-7 px-2">
                 Collapse All
               </Button>
             </div>
@@ -220,71 +331,87 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
             </label>
           </div>
 
-          {/* Month Navigation */}
-          <div className="flex items-center space-x-1 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-slate-50 dark:bg-slate-800">
-            <Button onClick={prevMonth} variant="ghost" size="icon" className="h-7 w-7">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button onClick={goToToday} variant="ghost" size="sm" className="text-xs h-7 px-2">
-              Today
-            </Button>
-            <Button onClick={nextMonth} variant="ghost" size="icon" className="h-7 w-7">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* Month Navigation (Only in Month Zoom Mode) */}
+          {zoomMode === 'MONTH' && (
+            <div className="flex items-center space-x-1 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-slate-50 dark:bg-slate-800">
+              <Button onClick={prevMonth} variant="ghost" size="icon" className="h-7 w-7">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-bold px-2 text-slate-800 dark:text-slate-200">
+                {format(currentMonth, 'MMM yyyy')}
+              </span>
+              <Button onClick={nextMonth} variant="ghost" size="icon" className="h-7 w-7">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </CardHeader>
 
       {/* Legend Bar */}
-      <div className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex flex-wrap items-center gap-4 text-xs">
-        <div className="flex items-center space-x-1.5">
-          <span className="h-2.5 w-6 rounded bg-slate-800 dark:bg-slate-200 border-b-2 border-indigo-600" />
-          <span className="text-slate-600 dark:text-slate-400">WBS Summary Phase Bracket</span>
+      <div className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between text-xs">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center space-x-1.5">
+            <span className="h-2.5 w-6 rounded bg-slate-800 dark:bg-slate-200 border-b-2 border-indigo-600" />
+            <span className="text-slate-600 dark:text-slate-400">WBS Phase Summary Bracket</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="h-2.5 w-6 rounded bg-indigo-500" />
+            <span className="text-slate-600 dark:text-slate-400">Standard Task Bar</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="h-2.5 w-6 rounded bg-rose-500" />
+            <span className="text-slate-600 dark:text-slate-400 font-semibold text-rose-600 dark:text-rose-400">Critical Path (Zero Float)</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <Diamond className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+            <span className="text-slate-600 dark:text-slate-400">APQP Milestone Diamond</span>
+          </div>
         </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="h-2.5 w-6 rounded bg-indigo-500" />
-          <span className="text-slate-600 dark:text-slate-400">Standard Task Bar</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="h-2.5 w-6 rounded bg-rose-500" />
-          <span className="text-slate-600 dark:text-slate-400 font-semibold text-rose-600 dark:text-rose-400">Critical Path (Zero Float)</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <Diamond className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-          <span className="text-slate-600 dark:text-slate-400">APQP Milestone Diamond</span>
-        </div>
+
+        <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+          Click any row to view task details, CPM float & dependencies
+        </span>
       </div>
 
       {/* Scrollable Gantt Matrix */}
       <CardContent className="p-0 overflow-x-auto">
-        <div className="min-w-[950px] select-none">
-          {/* Header Row: Days of Month */}
+        <div className="min-w-[1100px] select-none">
+          {/* Header Row: Days & Months */}
           <div
             className="grid bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-xs font-semibold sticky top-0 z-20"
             style={{
-              gridTemplateColumns: `320px repeat(${totalDaysInMonth}, minmax(30px, 1fr))`,
+              gridTemplateColumns: `340px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
             }}
           >
             <div className="p-3 border-r border-slate-200 dark:border-slate-800 font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
-              <span>{viewMode === 'WBS' ? 'WBS Structure & Deliverables' : 'Task & Milestone Items'} ({cpmTasks.length})</span>
-              <span className="text-[10px] text-slate-400 font-normal">Slack (Days)</span>
+              <span>{viewMode === 'WBS' ? 'WBS Structure & Deliverables' : 'All Project Activities'} ({cpmTasks.length})</span>
+              <span className="text-[10px] text-slate-400 font-normal">Slack</span>
             </div>
-            {days.map((day) => {
+
+            {timelineDays.map((day, idx) => {
               const isDayToday = isToday(day);
-              const isDayWeekend = isWeekend(day);
+              const isFirstOfMonth = day.getDate() === 1 || idx === 0;
               return (
                 <div
                   key={day.toISOString()}
-                  className={`p-1 text-center text-[10px] border-r border-slate-100 dark:border-slate-800/80 flex flex-col justify-center items-center ${
+                  className={`p-0.5 text-center text-[9px] border-r border-slate-100 dark:border-slate-800/60 flex flex-col justify-center items-center overflow-hidden ${
                     isDayToday
-                      ? 'bg-indigo-50 font-bold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400'
-                      : isDayWeekend
-                      ? 'bg-slate-100/50 dark:bg-slate-900/60 text-slate-400'
-                      : 'text-slate-600 dark:text-slate-400'
+                      ? 'bg-indigo-100/80 font-bold text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300'
+                      : isFirstOfMonth
+                      ? 'bg-indigo-50/50 dark:bg-slate-800 font-bold text-indigo-600 dark:text-indigo-400'
+                      : isWeekend(day)
+                      ? 'bg-slate-100/40 dark:bg-slate-900/40 text-slate-300 dark:text-slate-600'
+                      : 'text-slate-500 dark:text-slate-400'
                   }`}
+                  title={format(day, 'EEE, MMM d, yyyy')}
                 >
-                  <span className="text-[8px] uppercase tracking-wider">{format(day, 'EEE')}</span>
-                  <span className="font-semibold text-xs mt-0.5">{format(day, 'd')}</span>
+                  {isFirstOfMonth ? (
+                    <span className="text-[8px] font-bold uppercase truncate">{format(day, 'MMM')}</span>
+                  ) : zoomMode === 'MONTH' ? (
+                    <span className="text-[7px] uppercase">{format(day, 'EEE')[0]}</span>
+                  ) : null}
+                  <span className="font-semibold text-[10px] leading-tight">{format(day, 'd')}</span>
                 </div>
               );
             })}
@@ -292,178 +419,118 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
 
           {/* Rows Container */}
           <div className="divide-y divide-slate-100 dark:divide-slate-800 relative z-10">
-            {viewMode === 'WBS' && wbsHierarchyRows ? (
+            {viewMode === 'WBS' ? (
               // ==========================================
-              // WBS HIERARCHY VIEW
+              // WBS HIERARCHY VIEW (100% OF TASKS GROUPED)
               // ==========================================
-              wbsHierarchyRows.rootNodes.map((rootNode) => {
-                const isCollapsed = collapsedNodes.has(rootNode.id);
-                const childNodes = wbsNodes.filter((n) => n.parentNodeId === rootNode.id);
+              wbsGroups.map((group) => {
+                const isCollapsed = collapsedNodes.has(group.code);
 
-                // Collect all tasks under this root node and its children
-                const allNodeIds = [rootNode.id, ...childNodes.map((c) => c.id)];
-                const directAndChildTasks: Task[] = [];
-                allNodeIds.forEach((id) => {
-                  const matched = wbsHierarchyRows.tasksByWBS.get(id) || [];
-                  directAndChildTasks.push(...matched);
-                });
-
-                // Calculate summary envelope dates for the WBS Phase
-                let phaseStart = rootNode.startDate ? new Date(rootNode.startDate) : monthStart;
-                let phaseEnd = rootNode.dueDate ? new Date(rootNode.dueDate) : monthEnd;
-
-                if (directAndChildTasks.length > 0) {
-                  const taskStartTimes = directAndChildTasks
-                    .map((t) => (t.startDate ? new Date(t.startDate).getTime() : null))
-                    .filter((t): t is number => t !== null);
-                  const taskEndTimes = directAndChildTasks
-                    .map((t) => (t.dueDate ? new Date(t.dueDate).getTime() : null))
-                    .filter((t): t is number => t !== null);
-
-                  if (taskStartTimes.length > 0) phaseStart = new Date(Math.min(...taskStartTimes));
-                  if (taskEndTimes.length > 0) phaseEnd = new Date(Math.max(...taskEndTimes));
-                }
-
-                const phaseStartOffset = differenceInDays(phaseStart, monthStart);
-                const phaseDuration = Math.max(1, differenceInDays(phaseEnd, phaseStart) + 1);
-                const phaseLeftPercent = Math.max(0, Math.min(100, (phaseStartOffset / totalDaysInMonth) * 100));
-                const phaseWidthPercent = Math.max(4, Math.min(100 - phaseLeftPercent, (phaseDuration / totalDaysInMonth) * 100));
+                const phaseStartOffset = differenceInDays(group.startDate, projectStartDate);
+                const phaseDuration = Math.max(1, differenceInDays(group.endDate, group.startDate) + 1);
+                const phaseLeftPercent = Math.max(0, Math.min(100, (phaseStartOffset / totalTimelineDays) * 100));
+                const phaseWidthPercent = Math.max(2, Math.min(100 - phaseLeftPercent, (phaseDuration / totalTimelineDays) * 100));
 
                 return (
-                  <React.Fragment key={rootNode.id}>
-                    {/* WBS Root Phase Row (Summary Bracket) */}
+                  <React.Fragment key={group.code}>
+                    {/* WBS Phase Header & Summary Bracket */}
                     <div
-                      className="grid items-center bg-slate-100/70 dark:bg-slate-800/60 font-semibold py-2.5 border-b border-slate-200 dark:border-slate-700"
+                      className="grid items-center bg-slate-100/80 dark:bg-slate-800/70 font-semibold py-2.5 border-b border-slate-200 dark:border-slate-700 transition-colors"
                       style={{
-                        gridTemplateColumns: `320px repeat(${totalDaysInMonth}, minmax(30px, 1fr))`,
+                        gridTemplateColumns: `340px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
                       }}
                     >
-                      {/* Left Phase Title & Expand/Collapse */}
+                      {/* Left Phase Title */}
                       <div
-                        onClick={() => toggleNodeCollapse(rootNode.id)}
-                        className="px-3 text-xs font-bold text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-700 flex items-center justify-between cursor-pointer hover:bg-slate-200/50 dark:hover:bg-slate-700/50"
+                        onClick={() => toggleNodeCollapse(group.code)}
+                        className="px-3 text-xs font-bold text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-700 flex items-center justify-between cursor-pointer hover:bg-slate-200/60 dark:hover:bg-slate-700/60"
                       >
-                        <div className="flex items-center space-x-2 truncate">
-                          {isCollapsed ? (
-                            <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
-                          )}
-                          <span className="font-mono text-[10px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded font-bold">
-                            {rootNode.wbsCode}
+                        <div className="flex items-center space-x-2 truncate pr-2">
+                          <span className="p-0.5 rounded hover:bg-slate-300 dark:hover:bg-slate-600">
+                            {isCollapsed ? (
+                              <ChevronRight className="h-4 w-4 text-slate-600 dark:text-slate-300 shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-slate-600 dark:text-slate-300 shrink-0" />
+                            )}
                           </span>
-                          <span className="truncate">{rootNode.name}</span>
+                          <span className="font-mono text-[10px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded font-bold shrink-0">
+                            {group.code}
+                          </span>
+                          <span className="truncate">{group.name}</span>
                         </div>
-                        <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400">
-                          {rootNode.progress}%
-                        </span>
+                        <div className="flex items-center space-x-1.5 shrink-0">
+                          <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 font-mono font-normal">
+                            {group.tasks.length} items
+                          </Badge>
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {group.progress}%
+                          </span>
+                        </div>
                       </div>
 
                       {/* Right Timeline: Summary Bracket Gantt Bar [=======] */}
                       <div
                         className="relative h-6 flex items-center"
-                        style={{ gridColumn: `2 / span ${totalDaysInMonth}` }}
+                        style={{ gridColumn: `2 / span ${totalTimelineDays}` }}
                       >
                         <div
-                          className="absolute top-1/2 -translate-y-1/2 h-3.5 bg-slate-800 dark:bg-slate-200 rounded-sm shadow-sm flex items-center overflow-hidden"
+                          className="absolute top-1/2 -translate-y-1/2 h-3.5 bg-slate-800 dark:bg-slate-200 rounded-sm shadow-sm flex items-center overflow-hidden z-10"
                           style={{
                             left: `${phaseLeftPercent}%`,
                             width: `${phaseWidthPercent}%`,
                           }}
-                          title={`WBS Phase: ${rootNode.wbsCode} ${rootNode.name} (${format(phaseStart, 'MMM d')} - ${format(phaseEnd, 'MMM d')})`}
+                          title={`WBS Phase ${group.code} ${group.name} (${format(group.startDate, 'MMM d')} - ${format(group.endDate, 'MMM d')}, ${group.progress}% complete)`}
                         >
-                          {/* Progress fill */}
                           <div
                             className="h-full bg-indigo-600"
-                            style={{ width: `${rootNode.progress}%` }}
+                            style={{ width: `${group.progress}%` }}
                           />
                         </div>
                         {/* Summary Bracket Endpoints */}
                         <div
-                          className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100"
+                          className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100 z-10"
                           style={{ left: `${phaseLeftPercent}%` }}
                         />
                         <div
-                          className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100"
+                          className="absolute top-1/2 -translate-y-1/2 w-1.5 h-4 bg-slate-900 dark:bg-slate-100 z-10"
                           style={{ left: `${phaseLeftPercent + phaseWidthPercent}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* Render Child Tasks If Not Collapsed */}
-                    {!isCollapsed && (
-                      <>
-                        {/* Direct Tasks under this root node */}
-                        {(wbsHierarchyRows.tasksByWBS.get(rootNode.id) || []).map((task) => (
-                          <GanttTaskRow
-                            key={task.id}
-                            task={task}
-                            monthStart={monthStart}
-                            monthEnd={monthEnd}
-                            totalDaysInMonth={totalDaysInMonth}
-                            showCriticalPath={showCriticalPath}
-                            criticalPathTaskIds={criticalPathTaskIds}
-                            indent="pl-7"
-                            onTaskClick={onTaskClick}
-                          />
-                        ))}
-
-                        {/* Child WBS Deliverables */}
-                        {childNodes.map((childNode) => {
-                          const childTasks = wbsHierarchyRows.tasksByWBS.get(childNode.id) || [];
-                          return (
-                            <React.Fragment key={childNode.id}>
-                              {/* Sub-deliverable header row */}
-                              <div
-                                className="grid items-center bg-slate-50/60 dark:bg-slate-900/40 py-1.5 text-xs border-b border-slate-100 dark:border-slate-800"
-                                style={{
-                                  gridTemplateColumns: `320px repeat(${totalDaysInMonth}, minmax(30px, 1fr))`,
-                                }}
-                              >
-                                <div className="pl-6 pr-3 flex items-center space-x-2 border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-medium truncate">
-                                  <span className="font-mono text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1 py-0.2 rounded">
-                                    {childNode.wbsCode}
-                                  </span>
-                                  <span className="truncate">{childNode.name}</span>
-                                </div>
-                                <div style={{ gridColumn: `2 / span ${totalDaysInMonth}` }} />
-                              </div>
-
-                              {/* Tasks under this child deliverable */}
-                              {childTasks.map((task) => (
-                                <GanttTaskRow
-                                  key={task.id}
-                                  task={task}
-                                  monthStart={monthStart}
-                                  monthEnd={monthEnd}
-                                  totalDaysInMonth={totalDaysInMonth}
-                                  showCriticalPath={showCriticalPath}
-                                  criticalPathTaskIds={criticalPathTaskIds}
-                                  indent="pl-10"
-                                  onTaskClick={onTaskClick}
-                                />
-                              ))}
-                            </React.Fragment>
-                          );
-                        })}
-                      </>
-                    )}
+                    {/* Child Task Rows */}
+                    {!isCollapsed &&
+                      group.tasks.map((task, idx) => (
+                        <GanttTaskRow
+                          key={task.id}
+                          task={task}
+                          wbsChildCode={`${group.code}.${idx + 1}`}
+                          projectStartDate={projectStartDate}
+                          totalTimelineDays={totalTimelineDays}
+                          showCriticalPath={showCriticalPath}
+                          criticalPathTaskIds={criticalPathTaskIds}
+                          zoomMode={zoomMode}
+                          indent="pl-8"
+                          onTaskClick={onTaskClick}
+                        />
+                      ))}
                   </React.Fragment>
                 );
               })
             ) : (
               // ==========================================
-              // FLAT LIST VIEW
+              // FLAT CPM LIST (ALL 14 TASKS)
               // ==========================================
-              cpmTasks.map((task) => (
+              cpmTasks.map((task, idx) => (
                 <GanttTaskRow
                   key={task.id}
                   task={task}
-                  monthStart={monthStart}
-                  monthEnd={monthEnd}
-                  totalDaysInMonth={totalDaysInMonth}
+                  wbsChildCode={`#${idx + 1}`}
+                  projectStartDate={projectStartDate}
+                  totalTimelineDays={totalTimelineDays}
                   showCriticalPath={showCriticalPath}
                   criticalPathTaskIds={criticalPathTaskIds}
+                  zoomMode={zoomMode}
                   indent="pl-3"
                   onTaskClick={onTaskClick}
                 />
@@ -481,36 +548,38 @@ export default function GanttView({ tasks = [], projectId, onTaskClick }: GanttV
 // ----------------------------------------------------
 interface GanttTaskRowProps {
   task: Task & { isCritical?: boolean; totalFloat?: number };
-  monthStart: Date;
-  monthEnd: Date;
-  totalDaysInMonth: number;
+  wbsChildCode: string;
+  projectStartDate: Date;
+  totalTimelineDays: number;
   showCriticalPath: boolean;
   criticalPathTaskIds: Set<string>;
+  zoomMode: 'FULL_PROJECT' | 'MONTH';
   indent?: string;
   onTaskClick: (task: Task) => void;
 }
 
 function GanttTaskRow({
   task,
-  monthStart,
-  monthEnd,
-  totalDaysInMonth,
+  wbsChildCode,
+  projectStartDate,
+  totalTimelineDays,
   showCriticalPath,
   criticalPathTaskIds,
+  zoomMode,
   indent = 'pl-3',
   onTaskClick,
 }: GanttTaskRowProps) {
   let taskStart = task.startDate ? new Date(task.startDate) : task.dueDate ? new Date(task.dueDate) : new Date(task.createdAt);
   let taskEnd = task.dueDate ? new Date(task.dueDate) : addDays(taskStart, task.isMilestone ? 0 : 3);
 
-  if (isNaN(taskStart.getTime())) taskStart = monthStart;
+  if (isNaN(taskStart.getTime())) taskStart = projectStartDate;
   if (isNaN(taskEnd.getTime())) taskEnd = addDays(taskStart, task.isMilestone ? 0 : 3);
 
-  const startOffsetDays = differenceInDays(taskStart, monthStart);
+  const startOffsetDays = differenceInDays(taskStart, projectStartDate);
   const durationDays = task.isMilestone ? 0 : Math.max(1, differenceInDays(taskEnd, taskStart) + 1);
 
-  const leftPercent = Math.max(0, Math.min(100, (startOffsetDays / totalDaysInMonth) * 100));
-  const widthPercent = task.isMilestone ? 0 : Math.max(3, Math.min(100 - leftPercent, (durationDays / totalDaysInMonth) * 100));
+  const leftPercent = Math.max(0, Math.min(100, (startOffsetDays / totalTimelineDays) * 100));
+  const widthPercent = task.isMilestone ? 0 : Math.max(1.5, Math.min(100 - leftPercent, (durationDays / totalTimelineDays) * 100));
 
   const isTaskOnCriticalPath = showCriticalPath && (task.isCritical || criticalPathTaskIds.has(task.id));
   const isMilestone = task.isMilestone || !!task.milestoneId;
@@ -521,10 +590,10 @@ function GanttTaskRow({
       className={`grid items-center transition-colors py-2 ${
         isTaskOnCriticalPath
           ? 'bg-rose-50/30 dark:bg-rose-950/20'
-          : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/40'
+          : 'hover:bg-slate-50/70 dark:hover:bg-slate-800/50'
       }`}
       style={{
-        gridTemplateColumns: `320px repeat(${totalDaysInMonth}, minmax(30px, 1fr))`,
+        gridTemplateColumns: `340px repeat(${totalTimelineDays}, minmax(${zoomMode === 'FULL_PROJECT' ? '12px' : '28px'}, 1fr))`,
       }}
     >
       {/* Left Title & Status Cell */}
@@ -533,6 +602,7 @@ function GanttTaskRow({
         className={`${indent} pr-3 text-xs font-medium text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 flex items-center justify-between cursor-pointer group`}
       >
         <div className="flex items-center space-x-2 truncate pr-2">
+          <span className="font-mono text-[9px] text-slate-400 shrink-0">{wbsChildCode}</span>
           {isMilestone ? (
             <Diamond className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
           ) : isTaskOnCriticalPath ? (
@@ -562,6 +632,7 @@ function GanttTaskRow({
                   ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/60'
                   : 'text-slate-400'
               }`}
+              title={`Total Float / Slack: ${task.totalFloat} days`}
             >
               {task.totalFloat}d
             </span>
@@ -572,13 +643,13 @@ function GanttTaskRow({
       {/* Right Timeline Bar */}
       <div
         className="relative h-7 flex items-center"
-        style={{ gridColumn: `2 / span ${totalDaysInMonth}` }}
+        style={{ gridColumn: `2 / span ${totalTimelineDays}` }}
       >
         {isMilestone ? (
           /* Milestone Diamond */
           <div
             onClick={() => onTaskClick(task)}
-            className="absolute top-1/2 -translate-y-1/2 cursor-pointer z-10 hover:scale-125 transition-transform"
+            className="absolute top-1/2 -translate-y-1/2 cursor-pointer z-20 hover:scale-150 transition-transform"
             style={{ left: `${leftPercent}%` }}
             title={`Milestone: ${task.title} (${format(taskStart, 'MMM d, yyyy')})`}
           >
@@ -588,7 +659,7 @@ function GanttTaskRow({
           /* Standard / Critical Task Bar */
           <div
             onClick={() => onTaskClick(task)}
-            className={`absolute top-1/2 -translate-y-1/2 h-4 rounded-md shadow-sm cursor-pointer transition-all hover:brightness-110 flex items-center px-1.5 overflow-hidden ${
+            className={`absolute top-1/2 -translate-y-1/2 h-4 rounded-md shadow-sm cursor-pointer transition-all hover:brightness-110 flex items-center px-1.5 overflow-hidden z-10 ${
               isTaskOnCriticalPath
                 ? 'bg-rose-500 text-white ring-2 ring-rose-300 dark:ring-rose-800'
                 : 'bg-indigo-500 text-white'
@@ -598,7 +669,7 @@ function GanttTaskRow({
               width: `${widthPercent}%`,
               backgroundColor: isTaskOnCriticalPath ? '#ef4444' : STATUS_COLORS[task.status] || '#6366f1',
             }}
-            title={`${task.title} (${format(taskStart, 'MMM d')} - ${format(taskEnd, 'MMM d')}, ${durationDays} days) | Status: ${task.status}`}
+            title={`${task.title} (${format(taskStart, 'MMM d')} - ${format(taskEnd, 'MMM d')}, ${durationDays} days) | Status: ${task.status} | Slack: ${task.totalFloat ?? 0}d`}
           >
             <span className="text-[9px] font-semibold truncate leading-none drop-shadow">
               {task.title}
