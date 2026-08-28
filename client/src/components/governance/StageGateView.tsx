@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import toast from 'react-hot-toast';
 
 interface StageGateViewProps {
   projectId: string;
@@ -75,7 +76,8 @@ export default function StageGateView({ projectId, members }: StageGateViewProps
 
   const openSignOffModal = (gate: PhaseGate) => {
     setSigningOffGate(gate);
-    setSignOffStatus(gate.status === 'APPROVED' ? 'APPROVED' : 'APPROVED');
+    const hasPending = gate.criteria.filter((c) => !c.isMet).length > 0;
+    setSignOffStatus(gate.status === 'APPROVED' ? 'APPROVED' : hasPending ? 'CONDITIONAL_PASS' : 'APPROVED');
     setReviewSummary(gate.reviewSummary || '');
     setIsSignOffModalOpen(true);
   };
@@ -84,14 +86,26 @@ export default function StageGateView({ projectId, members }: StageGateViewProps
     e.preventDefault();
     if (!signingOffGate) return;
 
+    const hasPending = signingOffGate.criteria.filter((c) => !c.isMet).length > 0;
+    if (signOffStatus === 'APPROVED' && hasPending && reviewSummary.trim().length < 15) {
+      toast.error('APQP Compliance Guardrail: Gate cannot be Approved with pending checklist items without an explicit Executive Override Justification (min 15 chars).');
+      return;
+    }
+
     signOffGateMutation.mutate(
       {
         gateId: signingOffGate.id,
         status: signOffStatus,
-        reviewSummary,
+        reviewSummary: reviewSummary.trim(),
       },
       {
-        onSuccess: () => setIsSignOffModalOpen(false),
+        onSuccess: () => {
+          setIsSignOffModalOpen(false);
+          toast.success(`Stage Gate ${signingOffGate.gateCode} sign-off recorded`);
+        },
+        onError: (err: any) => {
+          toast.error(err.response?.data?.message || 'Failed to record gate sign-off');
+        },
       }
     );
   };

@@ -90,7 +90,10 @@ export default function KanbanCard({ task, onClick }: KanbanCardProps) {
       </div>
 
       {/* Task Title */}
-      <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 leading-snug">
+      <h4 
+        className="text-sm font-medium text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 leading-snug line-clamp-2 break-words overflow-hidden"
+        title={task.title}
+      >
         {task.title}
       </h4>
 

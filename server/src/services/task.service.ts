@@ -40,9 +40,12 @@ export const createTask = async (data: any, reporterId: string) => {
     : null;
   const order = lastTask ? lastTask.order + 1 : 0;
 
+  const sanitizedTitle = (rest.title || '').trim().slice(0, 200);
+
   return prisma.task.create({
     data: {
       ...rest,
+      title: sanitizedTitle,
       projectId,
       columnId,
       reporterId,
@@ -52,7 +55,7 @@ export const createTask = async (data: any, reporterId: string) => {
 };
 
 export const getTasksByProject = async (projectId: string, filters: any) => {
-  const { status, priority, assigneeId, labelId, milestoneId, search, page = 1, limit = 20, sortBy, sortOrder = 'asc' } = filters;
+  const { status, priority, assigneeId, labelId, milestoneId, search, page = 1, limit = 200, sortBy, sortOrder = 'asc' } = filters;
   const skip = (Number(page) - 1) * Number(limit);
   
   const where: any = { projectId };
@@ -122,6 +125,10 @@ export const updateTask = async (taskId: string, data: any) => {
 
   const finalStart = data.startDate ? new Date(data.startDate) : existing.startDate;
   const finalDue = data.dueDate ? new Date(data.dueDate) : existing.dueDate;
+
+  if (data.title) {
+    data.title = data.title.trim().slice(0, 200);
+  }
 
   if (finalStart && finalDue && finalDue < finalStart) {
     throw new AppError('Due date cannot precede start date', 400);

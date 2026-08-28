@@ -281,6 +281,11 @@ export default function ChangeManagementView({ projectId, members }: ChangeManag
                     placeholder="e.g. ECO-0107"
                     className="text-xs font-mono"
                   />
+                  {ecoCode.trim() && changes.find((c) => c.ecoCode.toUpperCase() === ecoCode.trim().toUpperCase()) && (
+                    <span className="text-[10px] text-rose-500 font-semibold block">
+                      ⚠️ Code already assigned to "{changes.find((c) => c.ecoCode.toUpperCase() === ecoCode.trim().toUpperCase())?.title}"
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-1">

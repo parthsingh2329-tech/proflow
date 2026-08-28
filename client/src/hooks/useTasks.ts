@@ -9,10 +9,11 @@ export const useTasks = (projectId?: string, filters?: Record<string, any>) => {
     queryFn: async () => {
       if (!projectId) return [];
       const params = new URLSearchParams();
+      params.append('limit', '500');
       if (filters) {
         Object.entries(filters).forEach(([key, val]) => {
           if (val !== undefined && val !== null && val !== '') {
-            params.append(key, String(val));
+            params.set(key, String(val));
           }
         });
       }

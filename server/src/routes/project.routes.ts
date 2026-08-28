@@ -25,6 +25,7 @@ router.delete('/:projectId', requireProjectRole('ADMIN'), projectController.dele
 router.post('/:projectId/members', requireProjectRole('ADMIN', 'MANAGER'), validate(addMemberSchema), projectController.addMember);
 router.get('/:projectId/members', requireProjectRole('ADMIN', 'MANAGER', 'MEMBER', 'VIEWER'), projectController.getMembers);
 router.put('/:projectId/members/:memberId', requireProjectRole('ADMIN', 'MANAGER'), validate(updateMemberSchema), projectController.updateMemberRole);
+router.patch('/:projectId/members/:memberId', requireProjectRole('ADMIN', 'MANAGER'), validate(updateMemberSchema), projectController.updateMemberRole);
 router.delete('/:projectId/members/:memberId', requireProjectRole('ADMIN', 'MANAGER'), projectController.removeMember);
 
 export default router;

@@ -3,7 +3,7 @@ import { Priority, TaskStatus } from '@prisma/client';
 export { validate } from './common';
 
 export const createTaskSchema = z.object({
-  title: z.string().min(1, 'Task title is required'),
+  title: z.string().min(1, 'Task title is required').max(200, 'Task title cannot exceed 200 characters'),
   description: z.string().optional(),
   priority: z.nativeEnum(Priority).optional(),
   status: z.nativeEnum(TaskStatus).optional(),

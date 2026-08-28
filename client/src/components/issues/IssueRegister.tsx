@@ -424,24 +424,34 @@ export default function IssueRegister({ projectId, members }: IssueRegisterProps
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Root Cause Analysis</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Root Cause Analysis</label>
+                  {status === 'RESOLVED' && (!rootCause || rootCause.trim().length < 5) && (
+                    <span className="text-[10px] text-rose-500 font-bold">Required to Resolve (min 5 chars)</span>
+                  )}
+                </div>
                 <Textarea
                   value={rootCause}
                   onChange={(e) => setRootCause(e.target.value)}
                   placeholder="Underlying technical root cause (5 Whys / Ishikawa)..."
                   rows={2}
-                  className="text-xs"
+                  className={`text-xs ${status === 'RESOLVED' && (!rootCause || rootCause.trim().length < 5) ? 'border-rose-400 dark:border-rose-700' : ''}`}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Corrective Action Plan (CAPA)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Corrective Action Plan (CAPA)</label>
+                  {status === 'RESOLVED' && (!correctiveAction || correctiveAction.trim().length < 5) && (
+                    <span className="text-[10px] text-rose-500 font-bold">Required to Resolve (min 5 chars)</span>
+                  )}
+                </div>
                 <Textarea
                   value={correctiveAction}
                   onChange={(e) => setCorrectiveAction(e.target.value)}
                   placeholder="Engineering ECO, rework, or tooling modification..."
                   rows={2}
-                  className="text-xs"
+                  className={`text-xs ${status === 'RESOLVED' && (!correctiveAction || correctiveAction.trim().length < 5) ? 'border-rose-400 dark:border-rose-700' : ''}`}
                 />
               </div>
 

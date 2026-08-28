@@ -254,6 +254,11 @@ export default function BaselineManager({ projectId }: BaselineManagerProps) {
                   required
                   className="text-xs"
                 />
+                {name.trim() && baselines.find((b) => b.name.toLowerCase() === name.trim().toLowerCase()) && (
+                  <span className="text-[10px] text-rose-500 font-semibold block">
+                    ⚠️ A baseline named "{name.trim()}" already exists. Please choose a distinct version (e.g. T1, T2).
+                  </span>
+                )}
               </div>
 
               <div className="space-y-1">

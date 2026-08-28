@@ -35,12 +35,10 @@ export default function FinancialsTab({ projectId }: FinancialsTabProps) {
   const [notes, setNotes] = useState('');
 
   const openSettings = () => {
-    if (budget) {
-      setApprovedBudget(budget.approvedBudget);
-      setContingencyReserve(budget.contingencyReserve);
-      setCurrency(budget.currency);
-      setNotes(budget.notes || '');
-    }
+    setApprovedBudget(budget?.approvedBudget || 150000000);
+    setContingencyReserve(budget?.contingencyReserve || 15000000);
+    setCurrency(budget?.currency || 'INR');
+    setNotes(budget?.notes || '');
     setIsSettingsOpen(true);
   };
 
@@ -51,7 +49,7 @@ export default function FinancialsTab({ projectId }: FinancialsTabProps) {
     const numericContingency = Number(contingencyReserve);
 
     if (isNaN(numericBudget) || numericBudget <= 0) {
-      toast.error('Approved project budget must be greater than 0');
+      toast.error('Approved project budget must be greater than 0 (e.g. ₹15,00,00,000)');
       return;
     }
 

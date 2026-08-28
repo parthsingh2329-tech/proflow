@@ -467,6 +467,11 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
                     placeholder="e.g. 1.1.2"
                     className="text-xs font-mono"
                   />
+                  {wbsCode.trim() && getAllNodes(wbsTree).find(n => n.wbsCode.toLowerCase() === wbsCode.trim().toLowerCase() && (!editingNode || n.id !== editingNode.id)) && (
+                    <span className="text-[10px] text-rose-500 font-semibold block">
+                      ⚠️ Code already assigned to "{getAllNodes(wbsTree).find(n => n.wbsCode.toLowerCase() === wbsCode.trim().toLowerCase())?.name}"
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-1">
@@ -495,26 +500,43 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
                     onChange={(e) => setProgress(Number(e.target.value))}
                     className="text-xs font-mono"
                   />
+                  {(progress < 0 || progress > 100) && (
+                    <span className="text-[10px] text-rose-500 font-semibold block">
+                      Must be 0-100%
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Planned Cost (₹)</label>
                   <Input
                     type="number"
+                    min="0"
                     value={plannedCost}
                     onChange={(e) => setPlannedCost(Number(e.target.value))}
                     className="text-xs font-mono"
                   />
+                  {plannedCost < 0 && (
+                    <span className="text-[10px] text-rose-500 font-semibold block">
+                      Cannot be negative
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Actual Cost (₹)</label>
                   <Input
                     type="number"
+                    min="0"
                     value={actualCost}
                     onChange={(e) => setActualCost(Number(e.target.value))}
                     className="text-xs font-mono"
                   />
+                  {actualCost < 0 && (
+                    <span className="text-[10px] text-rose-500 font-semibold block">
+                      Cannot be negative
+                    </span>
+                  )}
                 </div>
               </div>
 
