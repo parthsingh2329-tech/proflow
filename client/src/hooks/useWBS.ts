@@ -61,3 +61,21 @@ export const useDeleteWBSNode = (projectId: string) => {
     },
   });
 };
+
+export const usePromoteTaskToWBS = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, parentNodeId }: { taskId: string; parentNodeId: string }) => {
+      const res = await api.post(`/projects/${projectId}/wbs/promote-task`, { taskId, parentNodeId });
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wbs', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+      toast.success('Task promoted to WBS node successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to promote task');
+    },
+  });
+};

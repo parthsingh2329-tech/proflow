@@ -36,3 +36,16 @@ export const deleteWBSNode = async (req: Request, res: Response, next: NextFunct
     next(err);
   }
 };
+
+export const promoteTask = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const node = await wbsService.promoteTaskToWBSNode(
+      req.params.projectId,
+      req.body.taskId,
+      req.body.parentNodeId
+    );
+    res.status(201).json(node);
+  } catch (err) {
+    next(err);
+  }
+};

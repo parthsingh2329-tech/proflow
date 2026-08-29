@@ -186,3 +186,55 @@ export const updateWBSNode = async (nodeId: string, data: any) => {
 export const deleteWBSNode = async (nodeId: string) => {
   return prisma.wBSNode.delete({ where: { id: nodeId } });
 };
+
+export const promoteTaskToWBSNode = async (projectId: string, taskId: string, parentNodeId: string) => {
+  // Find the task
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!task) throw new AppError('Task not found', 404);
+  if (task.projectId !== projectId) throw new AppError('Task does not belong to this project', 400);
+
+  // Find the parent WBS node
+  const parentNode = await prisma.wBSNode.findUnique({ where: { id: parentNodeId } });
+  if (!parentNode) throw new AppError('Parent WBS node not found', 404);
+
+  // Generate the next child code
+  const siblingCount = await prisma.wBSNode.count({ where: { parentNodeId } });
+  const wbsCode = `${parentNode.wbsCode}.${siblingCount + 1}`;
+
+  // Check uniqueness
+  const existingCode = await prisma.wBSNode.findFirst({ where: { projectId, wbsCode } });
+  if (existingCode) {
+    throw new AppError(`WBS code "${wbsCode}" already exists. Please add the node manually with a custom code.`, 400);
+  }
+
+  // Map task status to progress
+  const progressMap: Record<string, number> = { DONE: 100, IN_REVIEW: 75, IN_PROGRESS: 50, TODO: 0 };
+  const progress = progressMap[task.status] ?? 0;
+
+  // Create the WBS node
+  const newNode = await prisma.wBSNode.create({
+    data: {
+      projectId,
+      parentNodeId,
+      wbsCode,
+      name: task.title,
+      nodeType: 'TASK',
+      order: siblingCount,
+      progress,
+      ownerId: task.assigneeId || null,
+      startDate: task.startDate,
+      dueDate: task.dueDate,
+    },
+    include: {
+      owner: { select: { id: true, name: true, avatar: true } },
+    },
+  });
+
+  // Re-link the task to the new WBS node
+  await prisma.task.update({
+    where: { id: taskId },
+    data: { wbsNodeId: newNode.id },
+  });
+
+  return newNode;
+};

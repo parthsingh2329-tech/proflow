@@ -1060,7 +1060,7 @@ async function main() {
     },
   });
 
-  await prisma.wBSNode.create({
+  const wbs1_1_1 = await prisma.wBSNode.create({
     data: {
       projectId: project1.id,
       parentNodeId: deliv1_1.id,
@@ -1077,7 +1077,7 @@ async function main() {
     },
   });
 
-  await prisma.wBSNode.create({
+  const wbs1_1_2 = await prisma.wBSNode.create({
     data: {
       projectId: project1.id,
       parentNodeId: deliv1_1.id,
@@ -1112,7 +1112,7 @@ async function main() {
     },
   });
 
-  await prisma.wBSNode.create({
+  const wbs1_2_1 = await prisma.wBSNode.create({
     data: {
       projectId: project1.id,
       parentNodeId: deliv1_2.id,
@@ -1129,7 +1129,7 @@ async function main() {
     },
   });
 
-  await prisma.wBSNode.create({
+  const wbs1_2_2 = await prisma.wBSNode.create({
     data: {
       projectId: project1.id,
       parentNodeId: deliv1_2.id,
@@ -1143,6 +1143,85 @@ async function main() {
       ownerId: safetyOfficer.id,
       startDate: new Date('2026-03-01'),
       dueDate: new Date('2026-07-30'),
+    },
+  });
+
+  // Promote loose tasks to coded WBS sub-task nodes
+  // Children of 1.1.1 (Power Stage Thermal Dyno Testing)
+  const wbs1_1_1_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: wbs1_1_1.id,
+      wbsCode: '1.1.1.1',
+      name: '500kW Dual-Motor Dyno High-Speed Calibration & Thermal Run',
+      nodeType: 'TASK',
+      order: 0,
+      progress: 0,
+      ownerId: chassisLead.id,
+      startDate: new Date('2026-04-12'),
+      dueDate: new Date('2026-05-25'),
+    },
+  });
+
+  const wbs1_1_1_2 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: wbs1_1_1.id,
+      wbsCode: '1.1.1.2',
+      name: '800V SiC Inverter Efficiency Optimization',
+      nodeType: 'TASK',
+      order: 1,
+      progress: 50,
+      ownerId: chiefEngineer.id,
+      startDate: new Date('2026-03-01'),
+      dueDate: new Date('2026-04-10'),
+    },
+  });
+
+  // Children of 1.2.1 (Immersion Dielectric Coolant Flow Mechanics CFD)
+  const wbs1_2_1_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: wbs1_2_1.id,
+      wbsCode: '1.2.1.1',
+      name: 'BMS Cell Balancing & Cold-Weather Immersion Cooling Validation',
+      nodeType: 'TASK',
+      order: 0,
+      progress: 100,
+      ownerId: batteryLead.id,
+      startDate: new Date('2026-01-20'),
+      dueDate: new Date('2026-02-28'),
+    },
+  });
+
+  const wbs1_2_1_2 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: wbs1_2_1.id,
+      wbsCode: '1.2.1.2',
+      name: 'Immersion Battery Cell Nail Penetration & Thermal Containment Test',
+      nodeType: 'TASK',
+      order: 1,
+      progress: 0,
+      ownerId: batteryLead.id,
+      startDate: new Date('2026-06-01'),
+      dueDate: new Date('2026-07-20'),
+    },
+  });
+
+  // Children of 1.2.2 (Bottom Enclosure FEA Crush & Drop Protection)
+  const wbs1_2_2_1 = await prisma.wBSNode.create({
+    data: {
+      projectId: project1.id,
+      parentNodeId: wbs1_2_2.id,
+      wbsCode: '1.2.2.1',
+      name: '100kWh Battery Enclosure Structural FEA & Crashworthiness',
+      nodeType: 'TASK',
+      order: 0,
+      progress: 50,
+      ownerId: batteryLead.id,
+      startDate: new Date('2026-02-15'),
+      dueDate: new Date('2026-04-05'),
     },
   });
 
@@ -1423,18 +1502,18 @@ async function main() {
   });
 
   // Link all tasks directly to their respective WBS Work Packages
-  await prisma.task.update({ where: { id: task1.id }, data: { wbsNodeId: deliv1_1.id } });
-  await prisma.task.update({ where: { id: task2.id }, data: { wbsNodeId: deliv1_1.id } });
-  await prisma.task.update({ where: { id: task3.id }, data: { wbsNodeId: deliv1_2.id } });
+  await prisma.task.update({ where: { id: task1.id }, data: { wbsNodeId: wbs1_1_1_2.id } }); // Inverter Efficiency → 1.1.1.2
+  await prisma.task.update({ where: { id: task2.id }, data: { wbsNodeId: wbs1_2_2_1.id } }); // Battery FEA → 1.2.2.1 (moved from 1.1)
+  await prisma.task.update({ where: { id: task3.id }, data: { wbsNodeId: wbs2_2_1.id } }); // LiDAR Calibration → 2.2.1 (moved from 1.2)
   await prisma.task.update({ where: { id: task4.id }, data: { wbsNodeId: wbs2_1_1.id } }); // Active Aero
-  await prisma.task.update({ where: { id: task5.id }, data: { wbsNodeId: deliv1_2.id } });
+  await prisma.task.update({ where: { id: task5.id }, data: { wbsNodeId: wbs1_2_1_1.id } }); // BMS Cell Balancing → 1.2.1.1
   await prisma.task.update({ where: { id: task6.id }, data: { wbsNodeId: wbs2_1_2.id } }); // Torque Vectoring
   await prisma.task.update({ where: { id: task7.id }, data: { wbsNodeId: wbs4_1_1.id } }); // ISO 26262
   await prisma.task.update({ where: { id: milestoneGate1.id }, data: { wbsNodeId: wbs4_1_2.id } });
   await prisma.task.update({ where: { id: task8.id }, data: { wbsNodeId: wbs3_1_1.id } }); // Giga Press
-  await prisma.task.update({ where: { id: task9.id }, data: { wbsNodeId: deliv1_1.id } }); // Dyno
+  await prisma.task.update({ where: { id: task9.id }, data: { wbsNodeId: wbs1_1_1_1.id } }); // Dyno → 1.1.1.1
   await prisma.task.update({ where: { id: task10.id }, data: { wbsNodeId: wbs2_2_2.id } }); // Sensor Fusion
-  await prisma.task.update({ where: { id: task11.id }, data: { wbsNodeId: deliv1_2.id } }); // Nail Penetration
+  await prisma.task.update({ where: { id: task11.id }, data: { wbsNodeId: wbs1_2_1_2.id } }); // Nail Penetration → 1.2.1.2
   await prisma.task.update({ where: { id: task12.id }, data: { wbsNodeId: wbs3_1_2.id } }); // Takt Time
   await prisma.task.update({ where: { id: milestoneTask.id }, data: { wbsNodeId: wbs4_1_3.id } });
 

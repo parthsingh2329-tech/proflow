@@ -13,11 +13,12 @@ import {
   Folder, 
   FileText,
   User,
-  FolderOpen
+  FolderOpen,
+  ArrowUpCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { WBSNode, WBSNodeType, ProjectMember } from '@/types';
-import { useWBS, useCreateWBSNode, useUpdateWBSNode, useDeleteWBSNode } from '@/hooks/useWBS';
+import { useWBS, useCreateWBSNode, useUpdateWBSNode, useDeleteWBSNode, usePromoteTaskToWBS } from '@/hooks/useWBS';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +45,7 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
   const createNodeMutation = useCreateWBSNode(projectId);
   const updateNodeMutation = useUpdateWBSNode(projectId);
   const deleteNodeMutation = useDeleteWBSNode(projectId);
+  const promoteTaskMutation = usePromoteTaskToWBS(projectId);
 
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -245,8 +247,8 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
                       {node.tasks.map((t: any) => (
                         <span
                           key={t.id}
-                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-medium"
-                          title={`Kanban Card: ${t.title} | Status: ${t.status}`}
+                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] bg-amber-50 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 font-medium"
+                          title={`Unlinked Task: ${t.title} | Status: ${t.status} | Not contributing to WBS rollup as a coded node`}
                         >
                           <span
                             className="h-1.5 w-1.5 rounded-full shrink-0"
@@ -261,10 +263,24 @@ export default function WBSView({ projectId, members }: WBSViewProps) {
                                   : '#94a3b8',
                             }}
                           />
-                          <span className="truncate max-w-[240px]">{t.title}</span>
+                          <span className="truncate max-w-[200px]">{t.title}</span>
                           <span className="font-mono text-[9px] uppercase font-bold text-slate-400">
                             [{t.status}]
                           </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(
+                                `Promote "${t.title}" to a coded WBS node under ${node.wbsCode} (${node.name})?\n\nThis will assign it a WBS code (e.g. ${node.wbsCode}.X) and include it in progress rollups.`
+                              )) {
+                                promoteTaskMutation.mutate({ taskId: t.id, parentNodeId: node.id });
+                              }
+                            }}
+                            className="ml-0.5 p-0.5 rounded-full hover:bg-amber-200 dark:hover:bg-amber-900 text-amber-600 dark:text-amber-400 transition-colors"
+                            title={`Promote to WBS node under ${node.wbsCode}`}
+                          >
+                            <ArrowUpCircle className="h-3 w-3" />
+                          </button>
                         </span>
                       ))}
                     </div>
