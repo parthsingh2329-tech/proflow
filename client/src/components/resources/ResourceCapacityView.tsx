@@ -283,7 +283,7 @@ export default function ResourceCapacityView({ projectId }: ResourceCapacityView
                   <div className="space-y-1.5 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
                     <div className="flex justify-between items-baseline text-xs">
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        Weekly Workload Allocation
+                        Weekly Workload Rate
                       </span>
                       <span className={`font-mono font-bold ${isOverloaded ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
                         {member.allocatedHours}h / {member.weeklyCapacityHours}h ({member.utilizationPercent}%)
@@ -305,7 +305,7 @@ export default function ResourceCapacityView({ projectId }: ResourceCapacityView
 
                     <div className="flex justify-between text-[10px] text-slate-400 pt-1">
                       <span>Rate: ₹{member.hourlyRate.toLocaleString('en-IN')}/hr</span>
-                      <span>{member.assignedTasksCount} Active Tasks Assigned</span>
+                      <span>Backlog: {member.totalBacklogHours || member.allocatedHours}h total ({member.assignedTasksCount} tasks)</span>
                     </div>
                   </div>
 
@@ -339,16 +339,17 @@ export default function ResourceCapacityView({ projectId }: ResourceCapacityView
 
                       {isExpanded && (
                         <div className="mt-2 space-y-1.5 pl-2 border-l-2 border-indigo-200 dark:border-indigo-800">
-                          {member.assignedTasks.map((t) => (
+                          {member.assignedTasks.map((t: any) => (
                             <div
                               key={t.id}
-                              className="text-xs p-1.5 rounded bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-between"
+                              className="text-xs p-2 rounded bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-between"
                             >
                               <span className="truncate max-w-[200px] font-medium text-slate-800 dark:text-slate-200">
                                 {t.title}
                               </span>
-                              <span className="font-mono text-[10px] font-bold text-slate-500">
-                                {t.estimatedHours || 8} hrs
+                              <span className="font-mono text-[10px] text-slate-500 font-semibold">
+                                {t.weeklyHours !== undefined ? `${t.weeklyHours}h/wk` : `${t.estimatedHours || 8}h`}
+                                {t.durationWeeks && t.durationWeeks > 1 ? ` (${t.totalHours}h / ${t.durationWeeks}wks)` : ''}
                               </span>
                             </div>
                           ))}

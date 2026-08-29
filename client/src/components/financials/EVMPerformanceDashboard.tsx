@@ -177,9 +177,10 @@ export default function EVMPerformanceDashboard({ budget }: EVMPerformanceDashbo
           <h4 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
             {formatCurrency(analytics.EV, budget.currency)}
           </h4>
-          <span className="text-[11px] text-slate-400 mt-1 block">
-            {analytics.projectPercentComplete}% Work Scope Complete
-          </span>
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1" title="Reconciled directly with Work Breakdown Structure (WBS) Deliverable progress">
+            <span>{analytics.projectPercentComplete}% WBS Scope Complete</span>
+            <span className="text-[9px] font-mono text-indigo-500 bg-indigo-50 dark:bg-indigo-950/80 px-1 rounded border border-indigo-200 dark:border-indigo-800">WBS Reconciled</span>
+          </div>
         </Card>
 
         {/* Actual Cost (AC) */}

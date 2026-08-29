@@ -58,18 +58,37 @@ export const getWBSHierarchy = async (projectId: string): Promise<WBSNodeWithChi
     }
   });
 
-  // Recursive rollup calculator
+  // Status to completion percentage mapping for tasks
+  const getTaskProgress = (status: string) => {
+    switch (status) {
+      case 'DONE': return 100;
+      case 'IN_REVIEW': return 75;
+      case 'IN_PROGRESS': return 50;
+      case 'TODO':
+      default: return 0;
+    }
+  };
+
+  // Recursive rollup calculator incorporating child nodes AND attached tasks
   const calculateRollups = (node: WBSNodeWithChildren) => {
     if (node.children.length > 0) {
       node.children.forEach(calculateRollups);
-      
+    }
+
+    const childNodeProgressSum = node.children.reduce((acc, c) => acc + c.progress, 0);
+    const childTasks = node.tasks || [];
+    const childTaskProgressSum = childTasks.reduce((acc, t) => acc + getTaskProgress(t.status), 0);
+
+    const totalItems = node.children.length + childTasks.length;
+
+    if (totalItems > 0) {
+      const avgProgress = (childNodeProgressSum + childTaskProgressSum) / totalItems;
+      node.progress = Math.round(avgProgress);
+
       const totalPlanned = node.children.reduce((acc, c) => acc + c.plannedCost, 0);
       const totalActual = node.children.reduce((acc, c) => acc + c.actualCost, 0);
-      const avgProgress = node.children.reduce((acc, c) => acc + c.progress, 0) / node.children.length;
-
-      node.plannedCost = totalPlanned > 0 ? totalPlanned : node.plannedCost;
-      node.actualCost = totalActual > 0 ? totalActual : node.actualCost;
-      node.progress = Math.round(avgProgress);
+      if (totalPlanned > 0) node.plannedCost = totalPlanned;
+      if (totalActual > 0) node.actualCost = totalActual;
     }
   };
 

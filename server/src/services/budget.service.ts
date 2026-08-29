@@ -1,6 +1,7 @@
 import prisma from '../config/db';
 import { AppError } from '../middleware/errorHandler';
 import { CostCategory, CostStatus } from '@prisma/client';
+import { getWBSHierarchy } from './wbs.service';
 
 export const getProjectBudget = async (projectId: string) => {
   let budget = await prisma.projectBudget.findUnique({
@@ -31,7 +32,7 @@ export const getProjectBudget = async (projectId: string) => {
     });
   }
 
-  // Fetch all tasks for dynamic EVM calculation
+  // Fetch all tasks for backup task count metric
   const tasks = await prisma.task.findMany({
     where: { projectId },
   });
@@ -40,15 +41,24 @@ export const getProjectBudget = async (projectId: string) => {
   const completedTasks = tasks.filter((t) => t.status === 'DONE').length;
   const inProgressTasks = tasks.filter((t) => t.status === 'IN_PROGRESS' || t.status === 'IN_REVIEW').length;
   
-  // Percent complete: Done=100%, In-Progress=50%
-  const projectPercentComplete = ((completedTasks * 1.0) + (inProgressTasks * 0.5)) / totalTasks;
+  // Reconciled single-source-of-truth: calculate scope completion directly from WBS hierarchy rollups
+  const wbsRoots = await getWBSHierarchy(projectId);
+  let wbsPercentComplete = 0;
+  if (wbsRoots.length > 0) {
+    const totalWBSProgress = wbsRoots.reduce((acc, root) => acc + (root.progress || 0), 0);
+    wbsPercentComplete = totalWBSProgress / (wbsRoots.length * 100);
+  } else {
+    wbsPercentComplete = ((completedTasks * 1.0) + (inProgressTasks * 0.5)) / totalTasks;
+  }
+
+  const projectPercentComplete = Number(wbsPercentComplete.toFixed(4));
 
   const totalPlannedCost = budget.costItems.reduce((acc, item) => acc + item.plannedAmount, 0);
   const totalCommittedCost = budget.costItems.reduce((acc, item) => acc + item.committedAmount, 0);
   const totalActualCost = budget.costItems.reduce((acc, item) => acc + item.actualAmount, 0);
 
   const BAC = budget.approvedBudget || totalPlannedCost || 1;
-  const EV = BAC * projectPercentComplete;
+  const EV = Number((BAC * projectPercentComplete).toFixed(2));
   const AC = totalActualCost > 0 ? totalActualCost : 1;
   
   // Planned Value (PV) up to now: assuming 60% of timeline elapsed if tasks are scheduled

@@ -36,18 +36,36 @@ export const getProjectResources = async (projectId: string) => {
       status: true,
       estimatedHours: true,
       assigneeId: true,
+      startDate: true,
       dueDate: true,
     },
   });
 
-  // 4. Compute allocation per member
+  // 4. Compute time-phased weekly allocation per member
   const resourceList = members.map((m) => {
     const profile = profileMap.get(m.userId);
     const assignedTasks = tasks.filter((t) => t.assigneeId === m.userId);
-    const allocatedHours = assignedTasks.reduce((acc, t) => acc + (t.estimatedHours || 8), 0);
+
+    const assignedTasksWithWeekly = assignedTasks.map((t) => {
+      const start = t.startDate ? new Date(t.startDate) : new Date();
+      const due = t.dueDate ? new Date(t.dueDate) : new Date(start.getTime() + 14 * 86400000);
+      const diffDays = Math.max(1, Math.round((due.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      const durationWeeks = Math.max(1, Math.round(diffDays / 7));
+      const totalHours = t.estimatedHours || 8;
+      const weeklyHours = Number((totalHours / durationWeeks).toFixed(1));
+      return {
+        ...t,
+        durationWeeks,
+        totalHours,
+        weeklyHours,
+      };
+    });
+
+    const weeklyAllocatedHours = Number(assignedTasksWithWeekly.reduce((acc, t) => acc + t.weeklyHours, 0).toFixed(1));
+    const totalBacklogHours = assignedTasksWithWeekly.reduce((acc, t) => acc + t.totalHours, 0);
     const weeklyCapacityHours = profile?.weeklyCapacityHours || 40.0;
     const hourlyRate = profile?.hourlyRate || 2500.0;
-    const utilizationPercent = Math.round((allocatedHours / weeklyCapacityHours) * 100);
+    const utilizationPercent = Math.round((weeklyAllocatedHours / weeklyCapacityHours) * 100);
 
     let overloadStatus: 'OVERLOADED' | 'BALANCED' | 'AVAILABLE' = 'AVAILABLE';
     if (utilizationPercent > 100) {
@@ -69,11 +87,13 @@ export const getProjectResources = async (projectId: string) => {
       weeklyCapacityHours,
       hourlyRate,
       skills: profile?.skills || 'Engineering, Systems Architecture',
-      allocatedHours,
+      allocatedHours: weeklyAllocatedHours,
+      weeklyAllocatedHours,
+      totalBacklogHours,
       utilizationPercent,
       overloadStatus,
       assignedTasksCount: assignedTasks.length,
-      assignedTasks,
+      assignedTasks: assignedTasksWithWeekly,
     };
   });
 

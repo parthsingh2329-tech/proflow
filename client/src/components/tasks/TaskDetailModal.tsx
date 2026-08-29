@@ -238,13 +238,24 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
   const predecessors = task?.dependenciesAsSuccessor || [];
   const successors = task?.dependenciesAsPredecessor || [];
 
-  // Capacity check for selected assignee
+  // Time-phased capacity check for selected assignee
   const getAssigneeCapacityWarning = (assigneeId: string | null) => {
     if (!assigneeId) return null;
-    const assignedTasks = (projectTasks as Task[]).filter((t) => t.assigneeId === assigneeId && t.id !== taskId);
-    const totalHours = assignedTasks.reduce((acc, t) => acc + (t.estimatedHours || 0), 0) + (task?.estimatedHours || 0);
-    if (totalHours > 40) {
-      return { totalHours, isOverloaded: true };
+    const allAssigned = (projectTasks as Task[]).filter((t) => t.assigneeId === assigneeId);
+    
+    // Time-phase task hours over duration weeks
+    const weeklyRate = allAssigned.reduce((acc, t) => {
+      const start = t.startDate ? new Date(t.startDate) : new Date();
+      const due = t.dueDate ? new Date(t.dueDate) : new Date(start.getTime() + 14 * 86400000);
+      const diffDays = Math.max(1, Math.round((due.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      const durationWeeks = Math.max(1, Math.round(diffDays / 7));
+      const hours = t.estimatedHours || 8;
+      return acc + (hours / durationWeeks);
+    }, 0);
+
+    const roundedWeekly = Number(weeklyRate.toFixed(1));
+    if (roundedWeekly > 40) {
+      return { weeklyRate: roundedWeekly, isOverloaded: true };
     }
     return null;
   };
@@ -524,7 +535,7 @@ export default function TaskDetailModal({ taskId, projectId, onClose }: TaskDeta
                   <label className="text-xs font-semibold text-slate-500">Assignee Lead</label>
                   {capacityWarning && (
                     <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center">
-                      <AlertTriangle className="h-3 w-3 mr-0.5" /> Overload ({capacityWarning.totalHours}h)
+                      <AlertTriangle className="h-3 w-3 mr-0.5" /> Overload ({capacityWarning.weeklyRate}h/wk)
                     </span>
                   )}
                 </div>

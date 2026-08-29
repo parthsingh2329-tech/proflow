@@ -454,6 +454,8 @@ export interface ResourceMember {
   hourlyRate: number;
   skills: string;
   allocatedHours: number;
+  weeklyAllocatedHours?: number;
+  totalBacklogHours?: number;
   utilizationPercent: number;
   overloadStatus: 'OVERLOADED' | 'BALANCED' | 'AVAILABLE';
   assignedTasksCount: number;
@@ -463,7 +465,11 @@ export interface ResourceMember {
     priority: string;
     status: string;
     estimatedHours?: number | null;
+    startDate?: string | null;
     dueDate?: string | null;
+    weeklyHours?: number;
+    totalHours?: number;
+    durationWeeks?: number;
   }>;
 }
 
